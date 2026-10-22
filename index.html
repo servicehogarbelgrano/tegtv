@@ -1,400 +1,246 @@
 <!DOCTYPE html>
 <html lang="es">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>TEG TV</title>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
-    <style>
-        * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
-        body { background-color: #1a1a1a; color: #ffffff; overflow: hidden; }
-        
-        #mode-selector { display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100vh; text-align: center; }
-        .btn { padding: 15px 30px; margin: 10px; font-size: 1.2rem; cursor: pointer; border: none; border-radius: 8px; background: #d32f2f; color: white; font-weight: bold; transition: 0.3s; }
-        .btn:hover { background: #b71c1c; }
-
-        /* PANTALLA DE TV */
-        #tv-container { display: none; width: 100vw; height: 100vh; position: relative; background: url('https://i.imgur.com/K1b5R9d.jpg') no-repeat center center; background-size: cover; }
-        #tv-lobby { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); background: rgba(0, 0, 0, 0.85); padding: 40px; border-radius: 15px; text-align: center; border: 2px solid #d32f2f; width: 80%; max-width: 800px; backdrop-filter: blur(5px); }
-        #qr-code { background: white; padding: 15px; margin: 20px auto; width: fit-content; border-radius: 10px; }
-        .sala-codigo { font-size: 5rem; color: #ffeb3b; letter-spacing: 10px; margin: 10px 0; font-weight: bold; }
-        #tv-connection-status { font-size: 2rem; color: #4caf50; margin-bottom: 20px; min-height: 70px; }
-        #tv-players { display: flex; flex-wrap: wrap; gap: 15px; justify-content: center; margin-top: 20px; min-height: 50px; }
-        .player-badge { padding: 10px 25px; border-radius: 20px; font-size: 1.5rem; font-weight: bold; color: white; text-shadow: 1px 1px 2px #000; }
-        
-        #tv-game { display: none; position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.7); flex-direction: column; }
-        .tv-status-bar { background: rgba(0, 0, 0, 0.9); padding: 20px; text-align: center; font-size: 2rem; border-bottom: 3px solid #d32f2f; color: #fff; }
-        
-        /* TABLERO DE PAISES EN TV */
-        #tv-tablero-paises { flex: 1; padding: 20px; overflow-y: auto; display: flex; flex-wrap: wrap; gap: 10px; justify-content: center; align-content: flex-start; }
-        .pais-box { background: #333; border: 2px solid #555; border-radius: 8px; padding: 10px; width: 180px; text-align: center; display: flex; flex-direction: column; justify-content: space-between; }
-        .pais-nombre { font-size: 1.1rem; font-weight: bold; margin-bottom: 5px; }
-        .pais-fichas { font-size: 2rem; font-weight: bold; background: rgba(0,0,0,0.5); border-radius: 50%; width: 50px; height: 50px; line-height: 50px; margin: 0 auto; color: white; }
-
-        .dado-resultado { background: rgba(30,30,30,0.9); padding: 30px; border-radius: 15px; text-align: center; width: 250px; border: 2px solid #555; }
-        .dado-numero { font-size: 6rem; color: #ffeb3b; font-weight: bold; margin-top: 10px; }
-
-        /* CELULAR */
-        #mobile-container { display: none; width: 100vw; height: 100vh; flex-direction: column; background-color: #1e1e1e; }
-        .mobile-header { background: #d32f2f; padding: 15px; text-align: center; font-size: 1.2rem; font-weight: bold; }
-        .mobile-content { flex: 1; padding: 20px; overflow-y: auto; display: flex; flex-direction: column; gap: 15px; }
-        input[type="text"], input[type="number"], select { width: 100%; padding: 15px; font-size: 1.2rem; border-radius: 8px; border: 1px solid #555; background: #333; color: white; text-align: center; margin-bottom: 15px; }
-        .card { background: #2c2c2c; padding: 20px; border-radius: 10px; border-left: 5px solid #d32f2f; }
-        .status-msg { text-align: center; font-size: 1.5rem; color: #ffeb3b; margin: 20px 0; padding: 20px; background: rgba(255, 235, 59, 0.1); border-radius: 10px; }
-        .action-btn { width: 100%; padding: 20px; font-size: 1.5rem; margin-bottom: 10px; border-radius: 10px; font-weight: bold; border: none; cursor: pointer; color: white; }
-    </style>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+<title>TEG TV · Tablero conectado</title>
+<script src="https://www.gstatic.com/firebasejs/10.4.0/firebase-app.js" type="module"></script>
+<style>
+:root{--bg:#10151d;--panel:#1b2430;--panel2:#253142;--line:#3c4c60;--text:#f4f7fb;--muted:#aab8c9;--accent:#e24b4b;--gold:#ffd166;--green:#4ade80}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--text);font-family:system-ui,-apple-system,Segoe UI,sans-serif}button,input,select{font:inherit}button{border:0;border-radius:10px;padding:12px 16px;background:#d43d43;color:white;font-weight:750;cursor:pointer}button:disabled{opacity:.4;cursor:not-allowed}.secondary{background:#33465d}.good{background:#20865a}.blue{background:#2469b2}.danger{background:#8e3038}.hidden{display:none!important}.screen{min-height:100vh;padding:20px}.center{display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center}.panel{background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:18px;box-shadow:0 12px 35px #0003}.stack{display:flex;flex-direction:column;gap:12px}.row{display:flex;align-items:center;gap:10px;flex-wrap:wrap}.muted{color:var(--muted)}h1,h2,h3,p{margin-top:0}input,select{width:100%;padding:12px;border-radius:9px;border:1px solid var(--line);background:#111923;color:white}.mode-buttons{display:flex;gap:12px;flex-wrap:wrap;justify-content:center}.mode-buttons button{min-width:220px;padding:16px}.brand{font-size:clamp(3rem,8vw,6rem);font-weight:950;letter-spacing:.12em;color:#f25c5c;text-shadow:0 5px #741d25}.layout{display:grid;grid-template-columns:minmax(0,1fr) 310px;gap:14px;height:calc(100vh - 32px)}.board-panel{min-height:0;display:flex;flex-direction:column}.board-head{display:flex;justify-content:space-between;gap:12px;align-items:center;flex-wrap:wrap;padding-bottom:12px}.map-wrap{position:relative;flex:1;min-height:400px;overflow:hidden;border-radius:13px;background:radial-gradient(ellipse at center,#25394a,#111923 75%);border:1px solid #314256}.map-wrap svg{width:100%;height:100%;display:block;min-height:400px}.map-link{stroke:#687b8e;stroke-width:2.4;opacity:.65}.territory{cursor:pointer;stroke:#e6edf5;stroke-width:1.8;transition:filter .12s,stroke-width .12s}.territory:hover{filter:brightness(1.25);stroke:#fff;stroke-width:3}.territory.selected{stroke:var(--gold);stroke-width:5;filter:drop-shadow(0 0 5px #ffd166)}.territory.target{stroke:#ff7777;stroke-width:4;stroke-dasharray:5 3}.territory-label{font-size:10px;fill:#fff;paint-order:stroke;stroke:#10151d;stroke-width:2.5px;stroke-linejoin:round;text-anchor:middle;pointer-events:none;font-weight:800}.army-label{font-size:12px;fill:#fff;text-anchor:middle;pointer-events:none;font-weight:950}.continent-label{fill:#8da2b8;font-size:18px;letter-spacing:3px;text-anchor:middle;opacity:.6;font-weight:900}.side{display:flex;flex-direction:column;gap:12px;overflow-y:auto;min-height:0}.turn-banner{background:#2b3c50;border-radius:12px;padding:14px;border-left:5px solid var(--gold)}.player-list{display:flex;flex-direction:column;gap:8px}.player-row{display:flex;align-items:center;gap:9px;background:#111923;padding:9px;border-radius:9px}.dot{width:15px;height:15px;border-radius:50%;flex:none;border:1px solid #ffffff80}.player-row .name{font-weight:750;flex:1}.tiny{font-size:.84rem}.log{font-size:.9rem;line-height:1.4;color:#d5deea;max-height:160px;overflow:auto}.mobile{max-width:700px;margin:0 auto;padding-bottom:32px}.mobile-head{padding:14px;background:#c93640;font-weight:900;text-align:center;position:sticky;top:0;z-index:3}.action-card{margin:12px}.objective{border-left:4px solid var(--gold)}.phase{font-size:.82rem;text-transform:uppercase;letter-spacing:.12em;color:var(--gold);font-weight:850}.country-list{display:flex;gap:6px;flex-wrap:wrap}.pill{background:#29384a;border-radius:20px;padding:6px 10px;font-size:.82rem}.dice{display:flex;gap:8px;flex-wrap:wrap}.die{font-size:1.5rem;font-weight:900;background:#f4f7fb;color:#15202b;border-radius:10px;width:48px;height:48px;display:grid;place-items:center}.notice{padding:12px;background:#182d25;border:1px solid #2b7954;border-radius:10px;color:#c8ffe0}.warn{padding:12px;background:#39282a;border:1px solid #754047;border-radius:10px;color:#ffd5d8}.room-code{font-size:2.8rem;letter-spacing:.2em;color:var(--gold);font-weight:950}.toast{padding:10px;border-radius:9px;background:#243448;color:#e7f0fb}.footer-note{font-size:.78rem;color:#93a3b5;line-height:1.45}
+@media(max-width:850px){.layout{display:flex;flex-direction:column;height:auto}.map-wrap{height:62vh;min-height:430px}.side{overflow:visible}.screen{padding:9px}.board-head h2{font-size:1.15rem}}
+@media(min-width:851px){.mobile-only{display:none!important}}
+</style>
 </head>
 <body>
-
-    <div id="mode-selector">
-        <h1 style="font-size: 4rem; margin-bottom: 10px; color: #d32f2f;">TEG</h1>
-        <p style="margin-bottom: 30px; color: #aaa; font-size: 1.5rem;">Seleccioná el dispositivo</p>
-        <button class="btn" id="btn-tv">Abrir en Televisor (Anfitrión)</button>
-        <button class="btn" id="btn-mobile-manual" style="background: #1976d2;">Entrar desde Celular</button>
+<section id="home" class="screen center">
+  <div class="brand">T.E.G.</div>
+  <h2>La guerra por el mundo empieza acá</h2>
+  <p class="muted">La TV muestra el tablero. Cada jugador usa su celular.</p>
+  <div class="panel stack" style="width:min(540px,100%)">
+    <button id="hostBtn">Crear sala en esta pantalla (TV)</button>
+    <button id="showJoinBtn" class="blue">Entrar desde un celular</button>
+    <div id="joinBox" class="stack hidden">
+      <label>Código de sala<input id="joinCode" maxlength="4" placeholder="AB12" autocomplete="off"></label>
+      <label>Tu nombre<input id="joinName" maxlength="24" placeholder="Nombre de jugador"></label>
+      <button id="joinBtn" class="good">Unirme a la partida</button>
     </div>
-
-    <!-- PANTALLA TV -->
-    <div id="tv-container">
-        <div id="tv-lobby">
-            <div id="tv-connection-status">Esperando jugadores...</div>
-            <div style="display: flex; justify-content: center; gap: 40px;">
-                <div id="qr-code"></div>
-                <div><p style="font-size: 1.5rem;">Sala:</p><div class="sala-codigo" id="tv-sala-id">----</div></div>
-            </div>
-            <div id="tv-players"></div>
-            <button class="btn" id="btn-start-game" style="display:none; margin-top: 30px; background: #4caf50;">Comenzar Partida</button>
-        </div>
-        
-        <div id="tv-game">
-            <div class="tv-status-bar" id="tv-status">Iniciando...</div>
-            <div id="tv-dados-area" style="display: flex; justify-content: center; gap: 40px; margin-top: 60px;"></div>
-            <div id="tv-tablero-paises" style="display: none;"></div>
-        </div>
+    <div id="homeError" class="warn hidden"></div>
+  </div>
+  <p class="footer-note" style="max-width:640px;margin-top:18px">Versión de desarrollo. Para partidas públicas, configurá reglas de Firestore que validen las acciones del lado servidor y protejan los objetivos secretos.</p>
+</section>
+<section id="lobby" class="screen center hidden">
+  <div class="panel stack" style="width:min(900px,100%)">
+    <h1>La sala está abierta</h1><p class="muted">Escaneá el QR o ingresá el código en el celular.</p>
+    <div class="room-code" id="roomCode">----</div>
+    <div id="qr" style="background:white;padding:10px;margin:auto;border-radius:8px;min-width:20px"></div>
+    <h3>Jugadores conectados</h3><div id="lobbyPlayers" class="player-list"></div>
+    <button id="startBtn" class="good" disabled>Comenzar partida (mínimo 2)</button>
+    <button id="cancelHostBtn" class="secondary">Volver</button>
+  </div>
+</section>
+<section id="tvGame" class="screen hidden">
+  <div class="layout">
+    <div class="panel board-panel">
+      <div class="board-head"><div><div class="phase" id="tvPhase">Preparando</div><h2 id="tvStatus">Tablero del mundo</h2></div><div class="row"><span class="pill" id="tvRound">Ronda 1</span><span class="pill" id="tvRoom"></span></div></div>
+      <div class="map-wrap"><svg id="worldMap" viewBox="0 0 1000 650" role="img" aria-label="Mapa esquemático de territorios seleccionables"></svg></div>
+      <div class="row" style="padding-top:10px"><span class="tiny muted">Colores = jugadores · Número = ejércitos · Línea = conexión entre territorios</span><button id="endTurnBtn" class="good" disabled>Terminar turno</button></div>
     </div>
+    <aside class="side">
+      <div class="panel"><h3>Turno actual</h3><div id="tvCurrent" class="turn-banner">Esperando partida…</div><p id="tvHint" class="muted tiny" style="margin:10px 0 0">Los jugadores eligen sus acciones desde el celular.</p></div>
+      <div class="panel"><h3>Jugadores</h3><div id="tvPlayerList" class="player-list"></div></div>
+      <div class="panel"><h3>Último resultado</h3><div id="tvBattle">Todavía no hubo ataques.</div></div>
+      <div class="panel"><h3>Registro de partida</h3><div id="tvLog" class="log">La partida aparecerá acá.</div></div>
+      <button id="backHomeBtn" class="secondary">Salir de la pantalla de juego</button>
+    </aside>
+  </div>
+</section>
+<section id="mobile" class="hidden">
+  <div class="mobile-head">T.E.G. · CONTROL DE JUGADOR</div>
+  <div id="mobileLogin" class="screen mobile stack">
+    <div class="panel stack"><h2>Entrar a una sala</h2><label>Código<input id="mCode" maxlength="4" autocomplete="off"></label><label>Tu nombre<input id="mName" maxlength="24" placeholder="Nombre"></label><button id="mJoinBtn" class="good">Conectarme</button><div id="mError" class="warn hidden"></div></div>
+  </div>
+  <div id="mobileGame" class="hidden mobile">
+    <div class="panel action-card objective"><div class="phase">Objetivo secreto</div><h3 id="mObjective">Se asignará al entrar</h3><p class="tiny muted">No muestres esta pantalla a los demás jugadores.</p></div>
+    <div class="panel action-card"><div class="row" style="justify-content:space-between"><div><div class="phase" id="mPhase">Esperando</div><h2 id="mStatus">Conectando…</h2></div><div class="dot" id="mColor"></div></div><div id="mMessage" class="toast">Esperando el inicio de la partida.</div></div>
+    <div id="reinforceCard" class="panel action-card hidden stack"><h3>1 · Incorporar ejércitos</h3><p>Ejércitos disponibles: <strong id="mReinforcements">0</strong></p><label>País propio<select id="mReinforceCountry"></select></label><label>Cuántos ejércitos<input id="mReinforceAmount" type="number" min="1" value="1"></label><button id="mPlaceBtn" class="blue">Colocar ejércitos</button><p class="tiny muted">Podés distribuirlos entre varios países hasta agotar el total.</p></div>
+    <div id="attackCard" class="panel action-card hidden stack"><h3>2 · Atacar</h3><p class="tiny muted">Elegí un país propio desde donde atacar y un territorio enemigo conectado.</p><label>Atacar desde<select id="mFrom"></select></label><label>Territorio objetivo<select id="mTo"></select></label><label>Ejércitos que atacan<select id="mAttackCount"><option value="1">1 dado</option><option value="2">2 dados</option><option value="3">3 dados</option></select></label><button id="mAttackBtn">Lanzar ataque</button><div id="mBattleResult"></div><button id="mConquerBtn" class="good hidden">Confirmar conquista</button><button id="mSkipAttackBtn" class="secondary">Terminar fase de ataque</button></div>
+    <div class="panel action-card"><h3>Mis territorios</h3><div id="mCountries" class="country-list"></div></div>
+    <div class="panel action-card"><h3>Estado de la partida</h3><div id="mPlayers" class="player-list"></div><button id="mLeaveBtn" class="secondary">Volver a inicio</button></div>
+  </div>
+</section>
+<script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.4.0/firebase-app.js";
+import { getFirestore, doc, setDoc, getDoc, updateDoc, onSnapshot, runTransaction, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.4.0/firebase-firestore.js";
+import { getAuth, signInAnonymously } from "https://www.gstatic.com/firebasejs/10.4.0/firebase-auth.js";
 
-    <!-- PANTALLA CELULAR -->
-    <div id="mobile-container">
-        <div class="mobile-header" id="mobile-header-title">TEG</div>
-        <div class="mobile-content" id="mobile-login">
-            <input type="text" id="mob-sala" placeholder="Código de Sala" maxlength="4" style="text-transform: uppercase;">
-            <input type="text" id="mob-nombre" placeholder="Tu Nombre">
-            <button class="btn" id="btn-join">Unirse</button>
-        </div>
-        <div class="mobile-content" id="mobile-game" style="display:none;">
-            <div class="card"><h3 style="color:#ffeb3b;">Objetivo</h3><p id="mob-objetivo">Cargando...</p></div>
-            <div id="mob-action-area">
-                <div class="status-msg" id="mob-status-msg">Esperando al anfitrión...</div>
-                <button class="action-btn" id="btn-roll-dice" style="display:none; background:#4caf50;">Tirar Dado</button>
-                
-                <div id="mob-turn-incorporacion" style="display:none; margin-top: 20px;">
-                    <h3 style="text-align:center; color:#4caf50; margin-bottom:10px;">Fase de Incorporación</h3>
-                    <p style="text-align:center; margin-bottom:15px;">Fichas disponibles: <strong id="mob-fichas-disponibles" style="color:#ffeb3b; font-size:1.5rem;">0</strong></p>
-                    <select id="mob-select-pais"></select>
-                    <input type="number" id="mob-input-fichas" placeholder="Cantidad de fichas" min="1">
-                    <button class="action-btn" id="btn-colocar-fichas" style="background:#1976d2;">Colocar Fichas</button>
-                </div>
-            </div>
-        </div>
-    </div>
-
-    <script type="module">
-        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.4.0/firebase-app.js";
-        import { getFirestore, doc, setDoc, onSnapshot, updateDoc, runTransaction } from "https://www.gstatic.com/firebasejs/10.4.0/firebase-firestore.js";
-        import { getAuth, signInAnonymously } from "https://www.gstatic.com/firebasejs/10.4.0/firebase-auth.js";
-
-        const firebaseConfig = {
-            apiKey: "AIzaSyDnQsK7jNVciU2Ruo-mwELvFR97S6tNhgg",
-            authDomain: "teg-tv.firebaseapp.com",
-            projectId: "teg-tv",
-            storageBucket: "teg-tv.firebasestorage.app",
-            messagingSenderId: "735650643113",
-            appId: "1:735650643113:web:e0ad00556934ce48773db8"
-        };
-
-        const app = initializeApp(firebaseConfig);
-        const db = getFirestore(app);
-        const auth = getAuth(app);
-
-        let currentSala = "";
-        let isHost = false;
-        let playerId = "";
-        let transicionHecha = false;
-
-        const COLORES = ["#d32f2f", "#1976d2", "#388e3c", "#fbc02d", "#8e24aa", "#f57c00"];
-        const TODOS_LOS_PAISES = [
-            "Argentina", "Brasil", "Chile", "Colombia", "Perú", "Uruguay", 
-            "Alaska", "Yukón", "Canadá", "Groenlandia", "Oregón", "Nueva York", "Terranova", "Labrador", "California", "México",
-            "Islandia", "Gran Bretaña", "España", "Francia", "Alemania", "Italia", "Polonia", "Rusia", "Suecia",
-            "Aral", "Tartaria", "Taymir", "Siberia", "Kamchatka", "Japón", "Mongolia", "Irán", "Gobi", "China", "Malasia", "India", "Arabia", "Israel", "Turquía",
-            "Sahara", "Zaire", "Etiopía", "Egipto", "Madagascar", "Sudáfrica",
-            "Australia", "Borneo", "Java", "Sumatra"
-        ];
-
-        const urlParams = new URLSearchParams(window.location.search);
-        const urlSala = urlParams.get('sala');
-
-        if (urlSala) {
-            document.getElementById('mode-selector').style.display = 'none';
-            document.getElementById('mobile-container').style.display = 'flex';
-            document.getElementById('mob-sala').value = urlSala;
-            document.getElementById('mob-sala').disabled = true;
-        }
-
-        // LÓGICA HOST (TV)
-        document.getElementById('btn-tv').addEventListener('click', async () => {
-            isHost = true;
-            document.getElementById('mode-selector').style.display = 'none';
-            document.getElementById('tv-container').style.display = 'block';
-            
-            currentSala = Math.random().toString(36).substring(2, 6).toUpperCase();
-            document.getElementById('tv-sala-id').innerText = currentSala;
-            
-            document.getElementById("qr-code").innerHTML = ""; 
-            new QRCode(document.getElementById("qr-code"), { text: window.location.href.split('?')[0] + "?sala=" + currentSala, width: 220, height: 220 });
-
-            await setDoc(doc(db, "salas", currentSala), { estado: "lobby", jugadores: {}, paises: {}, turnoActual: "" });
-
-            onSnapshot(doc(db, "salas", currentSala), async (docSnap) => {
-                const data = docSnap.data();
-                if(!data) return;
-                
-                const jugadoresData = Object.entries(data.jugadores || {});
-                const tvStatus = document.getElementById('tv-status');
-
-                if (data.estado === "lobby") {
-                    const playersDiv = document.getElementById('tv-players');
-                    playersDiv.innerHTML = "";
-                    jugadoresData.forEach(([id, j]) => {
-                        playersDiv.innerHTML += `<div class="player-badge" style="background:${j.color}">${j.nombre}</div>`;
-                    });
-                    if (jugadoresData.length >= 2) document.getElementById('btn-start-game').style.display = "inline-block";
-                }
-
-                if (data.estado === "sorteo") {
-                    const dadosArea = document.getElementById('tv-dados-area');
-                    dadosArea.style.display = "flex";
-                    dadosArea.innerHTML = "";
-                    
-                    let todosTiraron = true;
-                    let numeroMaximo = 0, ganadorNombre = "", ganadorId = "", empate = false;
-
-                    jugadoresData.forEach(([id, j]) => {
-                        let valorDado = j.dadoSorteo > 0 ? j.dadoSorteo : "?";
-                        dadosArea.innerHTML += `<div class="dado-resultado" style="border-color:${j.color}"><h2 style="color:${j.color}">${j.nombre}</h2><div class="dado-numero">${valorDado}</div></div>`;
-                        if (j.dadoSorteo === 0) todosTiraron = false;
-                        else {
-                            if (j.dadoSorteo > numeroMaximo) { numeroMaximo = j.dadoSorteo; ganadorNombre = j.nombre; ganadorId = id; empate = false; }
-                            else if (j.dadoSorteo === numeroMaximo) empate = true;
-                        }
-                    });
-
-                    if (todosTiraron && !transicionHecha) {
-                        transicionHecha = true;
-                        if (empate) {
-                            tvStatus.innerHTML = `¡Empate! Relanzando dados...`;
-                            setTimeout(async () => {
-                                const resetJugadores = { ...data.jugadores };
-                                for (let id in resetJugadores) resetJugadores[id].dadoSorteo = 0;
-                                await updateDoc(doc(db, "salas", currentSala), { jugadores: resetJugadores });
-                                transicionHecha = false;
-                            }, 3000);
-                        } else {
-                            tvStatus.innerHTML = `Ganó <strong style="color:${data.jugadores[ganadorId].color}">${ganadorNombre}</strong>. Repartiendo países...`;
-                            
-                            let paisesMezclados = [...TODOS_LOS_PAISES].sort(() => Math.random() - 0.5);
-                            let paisesAsignados = {};
-                            let indexJugador = 0;
-                            
-                            paisesMezclados.forEach(pais => {
-                                let idDuenio = jugadoresData[indexJugador][0];
-                                paisesAsignados[pais] = { duenio: idDuenio, fichas: 1 };
-                                indexJugador = (indexJugador + 1) % jugadoresData.length;
-                            });
-
-                            const updateJugadores = { ...data.jugadores };
-                            updateJugadores[ganadorId].fichasParaColocar = 5;
-
-                            setTimeout(async () => {
-                                await updateDoc(doc(db, "salas", currentSala), { 
-                                    estado: "incorporacion", 
-                                    turnoActual: ganadorId,
-                                    paises: paisesAsignados,
-                                    jugadores: updateJugadores
-                                });
-                                transicionHecha = false;
-                            }, 3000);
-                        }
-                    }
-                }
-
-                if (data.estado === "incorporacion") {
-                    document.getElementById('tv-dados-area').style.display = "none";
-                    const tablero = document.getElementById('tv-tablero-paises');
-                    tablero.style.display = "flex";
-                    tablero.innerHTML = "";
-                    
-                    const jActual = data.jugadores[data.turnoActual];
-                    tvStatus.innerHTML = `Fase de Incorporación - Turno de: <strong style="color:${jActual.color}">${jActual.nombre}</strong> (Fichas restantes: ${jActual.fichasParaColocar})`;
-
-                    Object.entries(data.paises).forEach(([nombrePais, info]) => {
-                        const duenio = data.jugadores[info.duenio];
-                        tablero.innerHTML += `
-                            <div class="pais-box" style="border-color:${duenio.color}">
-                                <div class="pais-nombre">${nombrePais}</div>
-                                <div class="pais-fichas" style="background:${duenio.color}">${info.fichas}</div>
-                            </div>
-                        `;
-                    });
-                }
-            });
-        });
-
-        document.getElementById('btn-start-game').addEventListener('click', async () => {
-            document.getElementById('tv-lobby').style.display = 'none';
-            document.getElementById('tv-game').style.display = 'flex';
-            await updateDoc(doc(db, "salas", currentSala), { estado: "sorteo" });
-        });
-
-        // LÓGICA CLIENTE (CELULAR)
-        document.getElementById('btn-mobile-manual').addEventListener('click', () => {
-            document.getElementById('mode-selector').style.display = 'none';
-            document.getElementById('mobile-container').style.display = 'flex';
-        });
-
-        document.getElementById('btn-join').addEventListener('click', async () => {
-            currentSala = document.getElementById('mob-sala').value.toUpperCase();
-            const nombre = document.getElementById('mob-nombre').value;
-            if(!currentSala || !nombre) return;
-
-            try {
-                await signInAnonymously(auth);
-                playerId = auth.currentUser.uid;
-
-                const salaRef = doc(db, "salas", currentSala);
-                const objetivos = [
-                    "Ocupar África y 5 países de América del Norte.",
-                    "Ocupar América del Sur, 7 países de Europa y 3 limítrofes.",
-                    "Ocupar Asia y 2 países de América del Sur."
-                ];
-
-                // Añade únicamente a este jugador y comprueba que la sala siga abierta.
-                const miObjetivo = await runTransaction(db, async (transaction) => {
-                    const salaSnap = await transaction.get(salaRef);
-                    if (!salaSnap.exists()) throw new Error("No existe esa sala. Revisá el código.");
-                    const salaData = salaSnap.data();
-                    if (salaData.estado !== "lobby") throw new Error("La partida ya comenzó.");
-                    const jugadores = salaData.jugadores || {};
-                    if (jugadores[playerId]) return jugadores[playerId].objetivo || objetivos[0];
-                    if (Object.keys(jugadores).length >= COLORES.length) {
-                        throw new Error("La sala está completa (máximo 6 jugadores).");
-                    }
-
-                    const objetivo = objetivos[Math.floor(Math.random() * objetivos.length)];
-                    const color = COLORES.find(c => !Object.values(jugadores).some(j => j.color === c)) || COLORES[0];
-                    transaction.update(salaRef, {
-                        [`jugadores.${playerId}`]: {
-                            nombre: nombre.trim().slice(0, 24),
-                            dadoSorteo: 0,
-                            fichasParaColocar: 0,
-                            objetivo,
-                            color
-                        }
-                    });
-                    return objetivo;
-                });
-
-                document.getElementById('mob-objetivo').innerText = miObjetivo;
-                document.getElementById('mobile-login').style.display = 'none';
-                document.getElementById('mobile-game').style.display = 'flex';
-            } catch (error) {
-                alert(error.message || "No se pudo entrar a la sala. Revisá la conexión e intentá de nuevo.");
-                return;
-            }
-
-            onSnapshot(doc(db, "salas", currentSala), (docSnap) => {
-                const data = docSnap.data();
-                if(!data || !data.jugadores[playerId]) return;
-
-                const msgDiv = document.getElementById('mob-status-msg');
-                const btnRoll = document.getElementById('btn-roll-dice');
-                const menuInc = document.getElementById('mob-turn-incorporacion');
-
-                if (data.estado === "lobby") {
-                    msgDiv.innerText = "Esperando al anfitrión...";
-                    msgDiv.style.display = "block"; btnRoll.style.display = "none"; menuInc.style.display = "none";
-                } 
-                else if (data.estado === "sorteo") {
-                    menuInc.style.display = "none";
-                    if (data.jugadores[playerId].dadoSorteo === 0) {
-                        msgDiv.style.display = "none"; btnRoll.style.display = "block";
-                    } else {
-                        btnRoll.style.display = "none"; msgDiv.innerText = `Sacaste ${data.jugadores[playerId].dadoSorteo}. Mirá la TV.`; msgDiv.style.display = "block";
-                    }
-                } 
-                else if (data.estado === "incorporacion") {
-                    btnRoll.style.display = "none";
-                    if (data.turnoActual === playerId && data.jugadores[playerId].fichasParaColocar > 0) {
-                        msgDiv.style.display = "none";
-                        menuInc.style.display = "block";
-                        document.getElementById('mob-fichas-disponibles').innerText = data.jugadores[playerId].fichasParaColocar;
-                        document.getElementById('mob-input-fichas').max = data.jugadores[playerId].fichasParaColocar;
-                        
-                        const selectPais = document.getElementById('mob-select-pais');
-                        selectPais.innerHTML = "";
-                        Object.entries(data.paises).forEach(([nombrePais, info]) => {
-                            if (info.duenio === playerId) {
-                                selectPais.innerHTML += `<option value="${nombrePais}">${nombrePais} (Actual: ${info.fichas})</option>`;
-                            }
-                        });
-                    } else {
-                        menuInc.style.display = "none";
-                        msgDiv.innerText = `Turno de ${data.jugadores[data.turnoActual].nombre}. Mirá la TV.`;
-                        msgDiv.style.display = "block";
-                    }
-                }
-            });
-        });
-
-        document.getElementById('btn-roll-dice').addEventListener('click', async () => {
-            await updateDoc(doc(db, "salas", currentSala), { [`jugadores.${playerId}.dadoSorteo`]: Math.floor(Math.random() * 6) + 1 });
-        });
-
-        document.getElementById('btn-colocar-fichas').addEventListener('click', async () => {
-            const paisSeleccionado = document.getElementById('mob-select-pais').value;
-            const cantidad = Number.parseInt(document.getElementById('mob-input-fichas').value, 10);
-            if (!paisSeleccionado || !Number.isInteger(cantidad) || cantidad < 1) {
-                alert("Elegí un país y una cantidad válida de fichas.");
-                return;
-            }
-
-            const salaRef = doc(db, "salas", currentSala);
-            try {
-                await runTransaction(db, async (transaction) => {
-                    const salaSnap = await transaction.get(salaRef);
-                    if (!salaSnap.exists()) throw new Error("La sala ya no existe.");
-                    const data = salaSnap.data();
-                    if (data.estado !== "incorporacion") throw new Error("La fase de incorporación ya terminó.");
-                    if (data.turnoActual !== playerId) throw new Error("No es tu turno.");
-
-                    const jugador = data.jugadores?.[playerId];
-                    const pais = data.paises?.[paisSeleccionado];
-                    if (!jugador || !pais || pais.duenio !== playerId) {
-                        throw new Error("Solo podés colocar fichas en un país tuyo.");
-                    }
-                    if (cantidad > Number(jugador.fichasParaColocar || 0)) {
-                        throw new Error("No tenés tantas fichas disponibles.");
-                    }
-
-                    transaction.update(salaRef, {
-                        [`paises.${paisSeleccionado}.fichas`]: Number(pais.fichas || 0) + cantidad,
-                        [`jugadores.${playerId}.fichasParaColocar`]: Number(jugador.fichasParaColocar || 0) - cantidad
-                    });
-                });
-                document.getElementById('mob-input-fichas').value = "";
-            } catch (error) {
-                alert(error.message || "No se pudieron colocar las fichas.");
-            }
-        });
-    </script>
+const firebaseConfig = {
+  apiKey: "AIzaSyDnQsK7jNVciU2Ruo-mwELvFR97S6tNhgg",
+  authDomain: "teg-tv.firebaseapp.com",
+  projectId: "teg-tv",
+  storageBucket: "teg-tv.firebasestorage.app",
+  messagingSenderId: "735650643113",
+  appId: "1:735650643113:web:e0ad00556934ce48773db8"
+};
+const app=initializeApp(firebaseConfig), db=getFirestore(app), auth=getAuth(app);
+const $=id=>document.getElementById(id);
+const COLORS=["#e74c3c","#3498db","#2ecc71","#f1c40f","#9b59b6","#e67e22"];
+const CONTINENTS={
+ "América del Norte":["Alaska","Yukón","Canadá","Groenlandia","Oregón","Nueva York","Terranova","Labrador","California","México"],
+ "América del Sur":["Argentina","Brasil","Chile","Colombia","Perú","Uruguay"],
+ "Europa":["Islandia","Gran Bretaña","España","Francia","Alemania","Italia","Polonia","Rusia","Suecia"],
+ "Asia":["Aral","Tartaria","Taymir","Siberia","Kamchatka","Japón","Mongolia","Irán","Gobi","China","Malasia","India","Arabia","Israel","Turquía"],
+ "África":["Sahara","Zaire","Etiopía","Egipto","Madagascar","Sudáfrica"],
+ "Oceanía":["Australia","Borneo","Java","Sumatra"]
+};
+const ALL=Object.values(CONTINENTS).flat();
+const ADJ={
+"Alaska":["Yukón","Kamchatka"],"Yukón":["Alaska","Canadá","Oregón"],"Canadá":["Yukón","Oregón","Nueva York","Terranova","Labrador","Groenlandia"],"Groenlandia":["Canadá","Terranova","Islandia"],"Oregón":["Yukón","Canadá","California","Nueva York"],"Nueva York":["Oregón","Canadá","Terranova","Labrador","California","México"],"Terranova":["Canadá","Nueva York","Labrador","Groenlandia"],"Labrador":["Canadá","Nueva York","Terranova"],"California":["Oregón","Nueva York","México"],"México":["California","Nueva York","Colombia"],
+"Argentina":["Chile","Brasil","Uruguay"],"Brasil":["Argentina","Uruguay","Colombia","Perú"],"Chile":["Argentina","Perú"],"Colombia":["Brasil","Perú","México"],"Perú":["Colombia","Brasil","Chile"],"Uruguay":["Argentina","Brasil"],
+"Islandia":["Groenlandia","Gran Bretaña","Suecia"],"Gran Bretaña":["Islandia","España","Francia","Alemania"],"España":["Gran Bretaña","Francia"],"Francia":["España","Gran Bretaña","Alemania","Italia"],"Alemania":["Gran Bretaña","Francia","Italia","Polonia","Suecia"],"Italia":["Francia","Alemania","Polonia","Turquía"],"Polonia":["Alemania","Italia","Rusia","Turquía"],"Rusia":["Polonia","Suecia","Aral","Tartaria"],"Suecia":["Islandia","Alemania","Rusia"],
+"Aral":["Rusia","Tartaria","Irán","Mongolia"],"Tartaria":["Aral","Rusia","Taymir","Siberia","Mongolia"],"Taymir":["Tartaria","Siberia"],"Siberia":["Taymir","Tartaria","Kamchatka","Mongolia","Gobi"],"Kamchatka":["Siberia","Alaska","Japón"],"Japón":["Kamchatka","Mongolia"],"Mongolia":["Siberia","Tartaria","Aral","Japón","Gobi","China"],"Irán":["Aral","Turquía","Israel","Arabia","India","Gobi"],"Gobi":["Siberia","Mongolia","China","Irán"],"China":["Gobi","Mongolia","India","Malasia"],"Malasia":["China","India","Sumatra","Java","Borneo"],"India":["China","Malasia","Irán","Arabia"],"Arabia":["Irán","India","Israel","Etiopía"],"Israel":["Irán","Arabia","Turquía","Egipto"],"Turquía":["Italia","Polonia","Irán","Israel"],
+"Sahara":["Egipto","Zaire","Etiopía","Sudáfrica"],"Zaire":["Sahara","Etiopía","Sudáfrica"],"Etiopía":["Sahara","Zaire","Egipto","Arabia","Sudáfrica"],"Egipto":["Sahara","Etiopía","Israel"],"Madagascar":["Sudáfrica"],"Sudáfrica":["Zaire","Etiopía","Sahara","Madagascar"],
+"Australia":["Borneo","Java","Sumatra"],"Borneo":["Australia","Malasia","Java"],"Java":["Borneo","Sumatra","Australia"],"Sumatra":["Malasia","Java","Australia"]
+};
+// Coordenadas esquemáticas: el mapa es interactivo, no una cartografía oficial.
+const POS={
+"Alaska":[85,115],"Yukón":[155,145],"Canadá":[230,120],"Groenlandia":[340,90],"Oregón":[160,205],"Nueva York":[250,205],"Terranova":[315,165],"Labrador":[300,125],"California":[160,265],"México":[220,315],
+"Argentina":[290,505],"Brasil":[350,430],"Chile":[250,475],"Colombia":[295,370],"Perú":[300,420],"Uruguay":[360,485],
+"Islandia":[460,120],"Gran Bretaña":[470,175],"España":[445,240],"Francia":[495,220],"Alemania":[535,190],"Italia":[535,245],"Polonia":[585,195],"Rusia":[650,160],"Suecia":[555,125],
+"Aral":[690,235],"Tartaria":[730,180],"Taymir":[745,115],"Siberia":[800,155],"Kamchatka":[890,145],"Japón":[900,220],"Mongolia":[790,220],"Irán":[680,300],"Gobi":[770,275],"China":[825,305],"Malasia":[850,380],"India":[750,360],"Arabia":[650,365],"Israel":[600,325],"Turquía":[585,275],
+"Sahara":[510,355],"Zaire":[550,420],"Etiopía":[610,395],"Egipto":[565,345],"Madagascar":[645,470],"Sudáfrica":[560,490],
+"Australia":[865,500],"Borneo":[825,420],"Java":[800,460],"Sumatra":[760,430]
+};
+let sala="",playerId="",isHost=false,unsubscribe=null,live=null,selectedFrom="",selectedTo="",pendingBattle=null;
+const roomRef=()=>doc(db,"salas",sala);
+function show(id){["home","lobby","tvGame","mobile"].forEach(x=>$(x).classList.toggle("hidden",x!==id))}
+function escapeHtml(s){return String(s??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]))}
+function err(id,msg){$(id).textContent=msg;$(id).classList.remove("hidden")}
+function clearErr(id){$(id).textContent="";$(id).classList.add("hidden")}
+function randomCode(){return Math.random().toString(36).slice(2,6).toUpperCase()}
+function shuffle(a){for(let i=a.length-1;i>0;i--){let j=Math.floor(Math.random()*(i+1));[a[i],a[j]]=[a[j],a[i]]}return a}
+function objectiveFor(playerName, assigned){const opts=[
+{label:"Controlá América del Sur y África",test:s=>continentOwner(s,"América del Sur",playerId)&&continentOwner(s,"África",playerId)},
+{label:"Controlá Europa y 5 territorios de Asia",test:s=>continentOwner(s,"Europa",playerId)&&countContinent(s,"Asia",playerId)>=5},
+{label:"Controlá América del Norte y 2 territorios de Oceanía",test:s=>continentOwner(s,"América del Norte",playerId)&&countContinent(s,"Oceanía",playerId)>=2},
+{label:"Controlá Asia y África",test:s=>continentOwner(s,"Asia",playerId)&&continentOwner(s,"África",playerId)},
+{label:"Ocupá 18 territorios con al menos 2 ejércitos en cada uno",test:s=>Object.values(s.paises||{}).filter(p=>p.duenio===playerId&&p.fichas>=2).length>=18},
+{label:"Ocupá 24 territorios",test:s=>Object.values(s.paises||{}).filter(p=>p.duenio===playerId).length>=24}
+];return opts[Math.floor(Math.random()*opts.length)].label}
+function countContinent(s,c,pid){return (CONTINENTS[c]||[]).filter(n=>s.paises?.[n]?.duenio===pid).length}
+function continentOwner(s,c,pid){return countContinent(s,c,pid)===(CONTINENTS[c]||[]).length}
+function addLog(old,msg){return [msg,...(old||[])].slice(0,18)}
+function playerName(s,id){return s?.jugadores?.[id]?.nombre||"Jugador"}
+function owned(s,id){return Object.entries(s?.paises||{}).filter(([n,p])=>p.duenio===id).map(([n])=>n)}
+function setSelect(id,items,placeholder){const el=$(id),prev=el.value;el.innerHTML="";if(!items.length){el.add(new Option("No hay territorios disponibles",""));return}items.forEach(n=>el.add(new Option(n,n)));if(items.includes(prev))el.value=prev}
+function svgEl(tag,attrs={},text=""){const e=document.createElementNS("http://www.w3.org/2000/svg",tag);Object.entries(attrs).forEach(([k,v])=>e.setAttribute(k,v));if(text)e.textContent=text;return e}
+function renderMap(s){
+ const svg=$("worldMap");svg.innerHTML="";
+ Object.entries(CONTINENTS).forEach(([c,names])=>{const pts=names.map(n=>POS[n]).filter(Boolean);if(!pts.length)return;const cx=pts.reduce((a,p)=>a+p[0],0)/pts.length,cy=pts.reduce((a,p)=>a+p[1],0)/pts.length;svg.append(svgEl("text",{x:cx,y:Math.max(35,cy-58),class:"continent-label"},c.toUpperCase()))});
+ const done=new Set();
+ Object.entries(ADJ).forEach(([a,ns])=>ns.forEach(b=>{const key=[a,b].sort().join("|");if(done.has(key)||!POS[a]||!POS[b])return;done.add(key);svg.append(svgEl("line",{x1:POS[a][0],y1:POS[a][1],x2:POS[b][0],y2:POS[b][1],class:"map-link"}))}));
+ ALL.forEach(name=>{const p=s.paises?.[name];if(!p)return;const [x,y]=POS[name];const g=svgEl("g",{});
+ const circle=svgEl("circle",{cx:x,cy:y,r:18,fill:s.jugadores?.[p.duenio]?.color||"#536273",class:"territory"+((selectedFrom===name)?" selected":"")+((selectedTo===name)?" target":"")});
+ circle.addEventListener("click",()=>territoryClick(name));g.append(circle);
+ g.append(svgEl("text",{x,y:y+4,class:"army-label"},p.fichas));
+ const label=svgEl("text",{x,y:y+31,class:"territory-label"},name);g.append(label);
+ g.addEventListener("click",()=>territoryClick(name));svg.append(g)});
+}
+function territoryClick(name){
+ if(!live||isHost===false)return;
+ if(live.turnoActual!==playerId)return;
+ if(live.fase==="ataque"){const p=live.paises[name];if(p?.duenio===playerId){selectedFrom=name;selectedTo="";populateAttackSelects()}else if(selectedFrom&&ADJ[selectedFrom]?.includes(name)&&p?.duenio!==playerId){selectedTo=name;populateAttackSelects()}renderMap(live)}
+}
+function populateAttackSelects(){
+ const mine=owned(live,playerId).filter(n=>(live.paises[n]?.fichas||0)>1);
+ setSelect("mFrom",mine);
+ const from=$("mFrom").value||mine[0];const targets=(ADJ[from]||[]).filter(n=>live.paises[n]&&live.paises[n].duenio!==playerId);
+ setSelect("mTo",targets);
+ if(selectedFrom&&mine.includes(selectedFrom))$("mFrom").value=selectedFrom;
+ if(selectedTo&&targets.includes(selectedTo))$("mTo").value=selectedTo;
+ const armies=live.paises[from]?.fichas||1;$("mAttackCount").innerHTML="";
+ for(let i=1;i<=Math.min(3,armies-1);i++)$("mAttackCount").add(new Option(`${i} dado${i>1?"s":""}`,i));
+}
+function renderLobby(s){
+ $("lobbyPlayers").innerHTML=Object.entries(s.jugadores||{}).map(([id,p])=>`<div class="player-row"><span class="dot" style="background:${p.color}"></span><span class="name">${escapeHtml(p.nombre)}</span><span class="tiny muted">${id===s.hostId?"Anfitrión": "Conectado"}</span></div>`).join("");
+ $("startBtn").disabled=Object.keys(s.jugadores||{}).length<2;
+}
+function renderGame(s){
+ live=s;const players=s.jugadores||{},current=players[s.turnoActual],mine=owned(s,playerId);
+ $("tvPhase").textContent=phaseName(s.fase);$("tvStatus").textContent=s.estado==="fin"?"Partida terminada":(current?`Turno de ${current.nombre}`:"Partida en curso");
+ $("tvRoom").textContent="Sala "+sala;$("tvRound").textContent="Ronda "+(s.ronda||1);
+ $("tvCurrent").innerHTML=current?`<div class="row"><span class="dot" style="background:${current.color}"></span><strong>${escapeHtml(current.nombre)}</strong></div><p class="tiny" style="margin:8px 0 0">${phaseName(s.fase)} · ${mine.length} territorios propios</p>`:"Sin turno";
+ $("tvHint").textContent=s.fase==="incorporacion"?"Los jugadores colocan sus ejércitos desde el celular.":s.fase==="ataque"?"Se pueden iniciar ataques entre territorios conectados.":"Esperando acciones de los jugadores.";
+ $("tvPlayerList").innerHTML=Object.entries(players).map(([id,p])=>`<div class="player-row"><span class="dot" style="background:${p.color}"></span><span class="name">${escapeHtml(p.nombre)}</span><span class="tiny">${owned(s,id).length} países</span></div>`).join("");
+ $("tvBattle").innerHTML=s.ultimoCombate?`<strong>${escapeHtml(s.ultimoCombate.texto)}</strong><div class="dice">${(s.ultimoCombate.ataque||[]).map(n=>`<span class="die">${n}</span>`).join("")}<span style="align-self:center">vs.</span>${(s.ultimoCombate.defensa||[]).map(n=>`<span class="die">${n}</span>`).join("")}</div>`:"Todavía no hubo ataques.";
+ $("tvLog").innerHTML=(s.registro||[]).map(x=>`<div>• ${escapeHtml(x)}</div>`).join("");
+ $("endTurnBtn").disabled=!(isHost&&s.fase==="ataque"&&s.turnoActual===playerId);
+ renderMap(s);renderMobile(s);
+}
+function phaseName(f){return ({lobby:"Sala de espera",sorteo:"Sorteo inicial",incorporacion:"Incorporación",ataque:"Fase de ataque",fin:"Finalizada"})[f]||f||"Esperando"}
+function renderMobile(s){
+ if(!playerId||!s.jugadores?.[playerId])return;
+ const me=s.jugadores[playerId],mine=owned(s,playerId),myTurn=s.turnoActual===playerId;
+ $("mObjective").textContent=me.objetivo||"Objetivo no asignado";$("mColor").style.background=me.color;
+ $("mPhase").textContent=phaseName(s.fase);$("mStatus").textContent=myTurn?"Es tu turno":`Turno de ${playerName(s,s.turnoActual)}`;
+ $("mMessage").textContent=s.estado==="lobby"?"Estás en la sala. Esperá a que el anfitrión comience.":myTurn?(s.fase==="incorporacion"?`Colocá tus ${me.fichasParaColocar||0} ejércitos disponibles.`:s.fase==="ataque"?"Podés atacar territorios enemigos conectados o terminar tu turno.":"Esperá la siguiente fase."):"Mirá la TV para seguir la partida.";
+ $("reinforceCard").classList.toggle("hidden",!(myTurn&&s.fase==="incorporacion"&&(me.fichasParaColocar||0)>0));
+ $("attackCard").classList.toggle("hidden",!(myTurn&&s.fase==="ataque"));
+ $("mReinforcements").textContent=me.fichasParaColocar||0;
+ setSelect("mReinforceCountry",mine);
+ $("mCountries").innerHTML=mine.map(n=>`<span class="pill">${escapeHtml(n)} · ${s.paises[n].fichas}</span>`).join("");
+ $("mPlayers").innerHTML=Object.entries(s.jugadores||{}).map(([id,p])=>`<div class="player-row"><span class="dot" style="background:${p.color}"></span><span class="name">${escapeHtml(p.nombre)}</span><span class="tiny">${owned(s,id).length}</span></div>`).join("");
+ if(s.fase==="ataque")populateAttackSelects();
+ if(pendingBattle&&s.ultimoCombate?.id===pendingBattle.id){$("mBattleResult").textContent=s.ultimoCombate.texto;if(s.ultimoCombate.conquistaPendiente&&s.ultimoCombate.atacanteId===playerId)$("mConquerBtn").classList.remove("hidden");else $("mConquerBtn").classList.add("hidden")}
+}
+async function createRoom(){
+ try{await signInAnonymously(auth);playerId=auth.currentUser.uid;isHost=true;sala=randomCode();
+ const p={};p[playerId]={nombre:"TV / Anfitrión",color:COLORS[0],dadoSorteo:0,fichasParaColocar:0,objetivo:""};
+ await setDoc(roomRef(),{estado:"lobby",fase:"lobby",hostId:playerId,jugadores:p,paises:{},turnoActual:"",ronda:1,registro:["Sala creada."],createdAt:serverTimestamp()});
+ show("lobby");$("roomCode").textContent=sala;$("tvRoom").textContent="Sala "+sala;
+ $("qr").innerHTML="";const qrUrl=location.href.split("?")[0]+"?sala="+sala;
+ try{const mod=await import("https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js");new QRCode($("qr"),{text:qrUrl,width:180,height:180})}catch(e){$("qr").innerHTML=`<p style="color:#222">Código: ${sala}</p>`}
+ listenRoom();
+ }catch(e){show("home");err("homeError","No se pudo crear la sala: "+e.message)}
+}
+async function joinRoom(code,name,errId){
+ try{clearErr(errId);if(!code||!name.trim())throw Error("Ingresá el código y tu nombre.");await signInAnonymously(auth);playerId=auth.currentUser.uid;sala=code.toUpperCase();isHost=false;
+ const ref=roomRef();await runTransaction(db,async tx=>{const snap=await tx.get(ref);if(!snap.exists())throw Error("No existe esa sala.");const s=snap.data();if(s.estado!=="lobby")throw Error("La partida ya comenzó.");const players=s.jugadores||{};if(players[playerId])return;if(Object.keys(players).length>=6)throw Error("La sala está completa (máximo 6 jugadores).");const color=COLORS.find(c=>!Object.values(players).some(p=>p.color===c))||COLORS[0];const objective=pickObjective(Object.keys(players).length);tx.update(ref,{[`jugadores.${playerId}`]:{nombre:name.trim().slice(0,24),color,dadoSorteo:0,fichasParaColocar:0,objetivo:objective}})});
+ show("mobile");$("mobileLogin").classList.add("hidden");$("mobileGame").classList.remove("hidden");listenRoom();
+ }catch(e){err(errId,e.message||"No se pudo conectar.")}
+}
+function pickObjective(i){const opts=["Controlá América del Sur y África","Controlá Europa y 5 territorios de Asia","Controlá América del Norte y 2 territorios de Oceanía","Controlá Asia y África","Ocupá 18 territorios con al menos 2 ejércitos en cada uno","Ocupá 24 territorios"];return opts[Math.floor(Math.random()*opts.length)]}
+function listenRoom(){if(unsubscribe)unsubscribe();unsubscribe=onSnapshot(roomRef(),snap=>{if(!snap.exists())return;const s=snap.data();live=s;if(s.estado==="lobby"){if(isHost){show("lobby");renderLobby(s)}else{show("mobile");$("mobileLogin").classList.add("hidden");$("mobileGame").classList.remove("hidden");renderMobile(s)}}else{if(isHost)show("tvGame");else show("mobile");if(isHost)renderGame(s);else renderMobile(s)}},e=>{if(isHost)err("homeError","Error de Firebase: "+e.message);else err("mError","Error de Firebase: "+e.message)})}
+async function startGame(){
+ const ref=roomRef();try{await runTransaction(db,async tx=>{const snap=await tx.get(ref);if(!snap.exists())throw Error("No existe la sala");const s=snap.data(),players={...s.jugadores},ids=Object.keys(players);if(ids.length<2)throw Error("Se necesitan al menos 2 jugadores");const shuffled=shuffle([...ALL]);const countries={};shuffled.forEach((n,i)=>countries[n]={duenio:ids[i%ids.length],fichas:1});const first=ids[Math.floor(Math.random()*ids.length)];players[first].fichasParaColocar=5;tx.update(ref,{estado:"jugando",fase:"incorporacion",paises:countries,turnoActual:first,ronda:1,registro:addLog(s.registro,"Comenzó la partida. Cada jugador recibe territorios al azar."),turnOrder:ids})});show("tvGame")}catch(e){alert(e.message)}
+}
+async function placeArmies(){const country=$("mReinforceCountry").value,n=Number($("mReinforceAmount").value);if(!country||!Number.isInteger(n)||n<1)return alert("Elegí país y cantidad válida.");try{await runTransaction(db,async tx=>{const ref=roomRef(),snap=await tx.get(ref);const s=snap.data(),me=s.jugadores[playerId],p=s.paises[country];if(s.fase!=="incorporacion"||s.turnoActual!==playerId)throw Error("No es tu fase de incorporación.");if(!p||p.duenio!==playerId)throw Error("Ese territorio no es tuyo.");if(n>me.fichasParaColocar)throw Error("No tenés tantos ejércitos.");tx.update(ref,{[`paises.${country}.fichas`]:p.fichas+n,[`jugadores.${playerId}.fichasParaColocar`]:me.fichasParaColocar-n,registro:addLog(s.registro,`${me.nombre} colocó ${n} ejército(s) en ${country}.`)})});$("mReinforceAmount").value=1}catch(e){alert(e.message)}}
+async function finishReinforcements(){try{await runTransaction(db,async tx=>{const ref=roomRef(),snap=await tx.get(ref),s=snap.data(),me=s.jugadores[playerId];if(s.turnoActual!==playerId||s.fase!=="incorporacion")throw Error("No es tu turno.");if(me.fichasParaColocar>0)throw Error("Primero colocá todos tus ejércitos.");tx.update(ref,{fase:"ataque",registro:addLog(s.registro,`${me.nombre} terminó la incorporación.`)})})}catch(e){alert(e.message)}}
+function roll(n){return Array.from({length:n},()=>Math.floor(Math.random()*6)+1).sort((a,b)=>b-a)}
+async function attack(){
+ const from=$("mFrom").value,to=$("mTo").value,dice=Number($("mAttackCount").value);if(!from||!to)return alert("Elegí un país propio y un objetivo enemigo.");let result;
+ try{await runTransaction(db,async tx=>{const ref=roomRef(),snap=await tx.get(ref),s=snap.data();if(s.fase!=="ataque"||s.turnoActual!==playerId)throw Error("No es tu turno de ataque.");const a=s.paises[from],d=s.paises[to];if(!a||!d||a.duenio!==playerId||d.duenio===playerId||!ADJ[from]?.includes(to))throw Error("Ataque inválido: los territorios deben ser vecinos y el origen debe ser tuyo.");if(a.fichas<=1||dice<1||dice>Math.min(3,a.fichas-1))throw Error("Cantidad de dados no válida.");const attackDice=roll(dice),defendDice=roll(Math.min(2,d.fichas));let lossesA=0,lossesD=0;for(let i=0;i<Math.min(attackDice.length,defendDice.length);i++){if(attackDice[i]>defendDice[i])lossesD++;else lossesA++}const countries={...s.paises,[from]:{...a,fichas:a.fichas-lossesA},[to]:{...d,fichas:d.fichas-lossesD}};const conquered=countries[to].fichas<=0;const battleId=Date.now().toString(36)+Math.random().toString(36).slice(2,5);if(conquered) countries[to]={...countries[to],fichas:1};const text=`${s.jugadores[playerId].nombre} atacó ${to} desde ${from}: perdió ${lossesA}, defensor perdió ${lossesD}${conquered?". Territorio conquistado; confirmá el traslado de ejércitos.":"."}`;result={id:battleId,attackDice,defendDice,conquered,from,to,lossesA,lossesD};tx.update(ref,{paises:countries,ultimoCombate:{id:battleId,texto:text,ataque:attackDice,defensa:defendDice,conquistaPendiente:conquered,atacanteId:playerId,from,to,lossesA,lossesD},registro:addLog(s.registro,text)})});
+ pendingBattle=result;if(result.conquered){$("mBattleResult").textContent="¡Conquista! Elegí cuántos ejércitos mover al territorio conquistado.";const move=prompt("¿Cuántos ejércitos mover desde "+from+" a "+to+"? (mínimo 1)", "1");const count=Number(move);if(Number.isInteger(count)&&count>=1)await confirmConquest(result,count)}else $("mBattleResult").textContent="Ataque resuelto. Revisá el resultado en la TV.";
+ }catch(e){alert(e.message||"No se pudo ejecutar el ataque.")}
+}
+async function confirmConquest(battle,count){try{await runTransaction(db,async tx=>{const ref=roomRef(),snap=await tx.get(ref),s=snap.data(),b=s.ultimoCombate;if(!b||b.id!==battle.id||!b.conquistaPendiente||b.atacanteId!==playerId)throw Error("La conquista ya fue resuelta.");const a=s.paises[b.from],d=s.paises[b.to];if(a.duenio!==playerId||d.duenio===playerId)throw Error("Estado de territorios inválido.");if(count<1||count>=a.fichas)throw Error("Tenés que mover al menos 1 ejército y dejar al menos 1 en el origen.");tx.update(ref,{[`paises.${b.from}.fichas`]:a.fichas-count,[`paises.${b.to}.duenio`]:playerId,[`paises.${b.to}.fichas`]:count,ultimoCombate:{...b,conquistaPendiente:false,texto:b.texto+" Ejército(s) trasladados: "+count+"."},registro:addLog(s.registro,`${s.jugadores[playerId].nombre} conquistó ${b.to}.`)})});$("mConquerBtn").classList.add("hidden")}catch(e){alert(e.message)}}
+async function endTurn(){try{await runTransaction(db,async tx=>{const ref=roomRef(),snap=await tx.get(ref),s=snap.data();if(s.turnoActual!==playerId||s.fase!=="ataque")throw Error("No es tu turno.");if(s.ultimoCombate?.conquistaPendiente)throw Error("Confirmá el traslado de ejércitos antes de terminar.");const ids=(s.turnOrder||Object.keys(s.jugadores)).filter(id=>s.jugadores[id]&&owned(s,id).length>0);let idx=ids.indexOf(playerId),next=ids[(idx+1)%ids.length],round=s.ronda||1;if(idx===ids.length-1)round++;const countries=s.paises;const nCountries=owned(s,next).length;const reinforcements=Math.max(3,Math.floor(nCountries/3));const players={...s.jugadores};players[next]={...players[next],fichasParaColocar:reinforcements};tx.update(ref,{turnoActual:next,fase:"incorporacion",ronda:round,jugadores:players,registro:addLog(s.registro,`${s.jugadores[playerId].nombre} terminó su turno. Le toca a ${players[next].nombre} con ${reinforcements} ejércitos.`)})})}catch(e){alert(e.message)}}
+$("hostBtn").addEventListener("click",createRoom);
+$("showJoinBtn").addEventListener("click",()=>{$("joinBox").classList.toggle("hidden")});
+$("joinBtn").addEventListener("click",()=>joinRoom($("joinCode").value,$("joinName").value,"homeError"));
+$("mJoinBtn").addEventListener("click",()=>joinRoom($("mCode").value,$("mName").value,"mError"));
+$("startBtn").addEventListener("click",startGame);
+$("cancelHostBtn").addEventListener("click",()=>{if(unsubscribe)unsubscribe();show("home")});
+$("mPlaceBtn").addEventListener("click",placeArmies);
+$("mAttackBtn").addEventListener("click",attack);
+$("mConquerBtn").addEventListener("click",()=>{if(pendingBattle){const c=Number(prompt("¿Cuántos ejércitos trasladás? (mínimo 1 y dejando 1 en el origen)","1"));if(Number.isInteger(c))confirmConquest(pendingBattle,c)}});
+$("mSkipAttackBtn").addEventListener("click",finishReinforcements);
+$("endTurnBtn").addEventListener("click",endTurn);
+$("mFrom").addEventListener("change",()=>{selectedFrom=$("mFrom").value;populateAttackSelects();if(live)renderMap(live)});
+$("mTo").addEventListener("change",()=>{selectedTo=$("mTo").value;if(live)renderMap(live)});
+$("backHomeBtn").addEventListener("click",()=>{if(unsubscribe)unsubscribe();show("home")});
+$("mLeaveBtn").addEventListener("click",()=>{if(unsubscribe)unsubscribe();playerId="";show("home")});
+const params=new URLSearchParams(location.search);if(params.get("sala")){$("home").classList.add("hidden");$("mobile").classList.remove("hidden");$("mobileLogin").classList.remove("hidden");$("mCode").value=params.get("sala").toUpperCase()}
+</script>
 </body>
 </html>
