@@ -102,7 +102,6 @@
         import { getFirestore, doc, setDoc, onSnapshot, updateDoc } from "https://www.gstatic.com/firebasejs/10.4.0/firebase-firestore.js";
         import { getAuth, signInAnonymously } from "https://www.gstatic.com/firebasejs/10.4.0/firebase-auth.js";
 
-        // CREDENCIALES COMPLETAS (CORREGIDO)
         const firebaseConfig = {
             apiKey: "AIzaSyDnQsK7jNVciU2Ruo-mwELvFR97S6tNhgg",
             authDomain: "teg-tv.firebaseapp.com",
@@ -150,7 +149,7 @@
             currentSala = Math.random().toString(36).substring(2, 6).toUpperCase();
             document.getElementById('tv-sala-id').innerText = currentSala;
             
-            document.getElementById("qr-code").innerHTML = ""; // Evita duplicar el QR
+            document.getElementById("qr-code").innerHTML = ""; 
             new QRCode(document.getElementById("qr-code"), { text: window.location.href.split('?')[0] + "?sala=" + currentSala, width: 220, height: 220 });
 
             await setDoc(doc(db, "salas", currentSala), { estado: "lobby", jugadores: {}, paises: {}, turnoActual: "" });
@@ -273,12 +272,22 @@
             document.getElementById('mobile-login').style.display = 'none';
             document.getElementById('mobile-game').style.display = 'flex';
             
+            // GENERAR OBJETIVO
+            const objetivos = [
+                "Ocupar África y 5 países de América del Norte.",
+                "Ocupar América del Sur, 7 países de Europa y 3 limítrofes.",
+                "Ocupar Asia y 2 países de América del Sur."
+            ];
+            const miObjetivo = objetivos[Math.floor(Math.random() * objetivos.length)];
+            document.getElementById('mob-objetivo').innerText = miObjetivo;
+
             const docSnapInit = await setDoc(doc(db, "salas", currentSala), {
                 jugadores: {
                     [playerId]: { 
                         nombre: nombre, 
                         dadoSorteo: 0, 
                         fichasParaColocar: 0,
+                        objetivo: miObjetivo,
                         color: COLORES[Math.floor(Math.random() * COLORES.length)]
                     }
                 }
