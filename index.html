@@ -45,7 +45,7 @@
     <div class="panel board-panel">
       <div class="board-head"><div><div class="phase" id="tvPhase">Preparando</div><h2 id="tvStatus">Tablero del mundo</h2></div><div class="row"><span class="pill" id="tvRound">Ronda 1</span><span class="pill" id="tvRoom"></span></div></div>
       <div class="map-wrap"><svg id="worldMap" viewBox="0 0 1024 724" role="img" aria-label="Mapa esquemático de territorios seleccionables"></svg></div>
-      <div class="row" style="padding-top:10px"><span class="tiny muted">Colores = jugadores · Número = ejércitos · Línea = conexión entre territorios</span><button id="endTurnBtn" class="good" disabled>Terminar turno</button></div>
+      <div class="row" style="padding-top:10px"><span class="tiny muted">Colores = jugadores · Número = ejércitos · Línea = conexión entre territorios</span><button id="endTurnBtn" class="good hidden" disabled>Terminar turno</button></div>
     </div>
     <aside class="side">
       <div class="panel"><h3>Turno actual</h3><div id="tvCurrent" class="turn-banner">Esperando partida…</div><p id="tvHint" class="muted tiny" style="margin:10px 0 0">Los jugadores eligen sus acciones desde el celular.</p></div>
@@ -64,8 +64,9 @@
   <div id="mobileGame" class="hidden mobile">
     <div class="panel action-card objective"><div class="phase">Objetivo secreto</div><h3 id="mObjective">Se asignará al entrar</h3><p class="tiny muted">No muestres esta pantalla a los demás jugadores.</p></div>
     <div class="panel action-card"><div class="row" style="justify-content:space-between"><div><div class="phase" id="mPhase">Esperando</div><h2 id="mStatus">Conectando…</h2></div><div class="dot" id="mColor"></div></div><div id="mMessage" class="toast">Esperando el inicio de la partida.</div></div>
+    <div id="sorteoCard" class="panel action-card hidden stack"><h3>Sorteo inicial</h3><p>Tirá el dado: empieza el que saque el número más alto.</p><button id="sorteoBtn" class="good">🎲 Tirar dado</button></div>
     <div id="reinforceCard" class="panel action-card hidden stack"><h3>1 · Incorporar ejércitos</h3><p>Ejércitos disponibles: <strong id="mReinforcements">0</strong></p><label>País propio<select id="mReinforceCountry"></select></label><label>Cuántos ejércitos<input id="mReinforceAmount" type="number" min="1" value="1"></label><button id="mPlaceBtn" class="blue">Colocar ejércitos</button><p class="tiny muted">Podés distribuirlos entre varios países hasta agotar el total.</p></div>
-    <div id="attackCard" class="panel action-card hidden stack"><h3>2 · Atacar</h3><p class="tiny muted">Elegí un país propio desde donde atacar y un territorio enemigo conectado.</p><label>Atacar desde<select id="mFrom"></select></label><label>Territorio objetivo<select id="mTo"></select></label><label>Ejércitos que atacan<select id="mAttackCount"><option value="1">1 dado</option><option value="2">2 dados</option><option value="3">3 dados</option></select></label><button id="mAttackBtn">Lanzar ataque</button><div id="mBattleResult"></div><button id="mConquerBtn" class="good hidden">Confirmar conquista</button><button id="mSkipAttackBtn" class="secondary">Terminar fase de ataque</button></div>
+    <div id="attackCard" class="panel action-card hidden stack"><h3>2 · Atacar</h3><p class="tiny muted">Elegí un país propio desde donde atacar y un territorio enemigo conectado.</p><label>Atacar desde<select id="mFrom"></select></label><label>Territorio objetivo<select id="mTo"></select></label><label>Ejércitos que atacan<select id="mAttackCount"><option value="1">1 dado</option><option value="2">2 dados</option><option value="3">3 dados</option></select></label><button id="mAttackBtn">Lanzar ataque</button><div id="mBattleResult"></div><button id="mConquerBtn" class="good hidden">Confirmar conquista</button><button id="mSkipAttackBtn" class="secondary">Terminar turno</button></div>
     <div class="panel action-card"><h3>Mis territorios</h3><div id="mCountries" class="country-list"></div></div>
     <div class="panel action-card"><h3>Estado de la partida</h3><div id="mPlayers" class="player-list"></div><button id="mLeaveBtn" class="secondary">Volver a inicio</button></div>
   </div>
@@ -147,7 +148,7 @@ function renderLobby(s){
  $("lobbyPlayers").innerHTML=Object.entries(s.jugadores||{}).map(([id,p])=>`<div class="player-row"><span class="dot" style="background:${p.color}"></span><span class="name">${escapeHtml(p.nombre)}</span><span class="tiny muted">${id===s.hostId?"Anfitrión": "Conectado"}</span></div>`).join("");
  $("startBtn").disabled=Object.keys(s.jugadores||{}).length<2;
 }
-function renderGame(s){
+function renderGameBase(s){
  live=s;const players=s.jugadores||{},current=players[s.turnoActual],mine=owned(s,playerId);
  $("tvPhase").textContent=phaseName(s.fase);$("tvStatus").textContent=s.estado==="fin"?"Ganó "+playerName(s,s.ganador):(current?`Turno de ${current.nombre}`:"Partida en curso");
  $("tvRoom").textContent="Sala "+sala;$("tvRound").textContent="Ronda "+(s.ronda||1);
@@ -160,7 +161,7 @@ function renderGame(s){
  renderMap(s);renderMobile(s);
 }
 function phaseName(f){return ({lobby:"Sala de espera",sorteo:"Sorteo inicial",incorporacion:"Incorporación",ataque:"Fase de ataque",fin:"Finalizada"})[f]||f||"Esperando"}
-function renderMobile(s){
+function renderMobileBase(s){
  if(!playerId||!s.jugadores?.[playerId])return;
  const me=s.jugadores[playerId],mine=owned(s,playerId),myTurn=s.turnoActual===playerId;
  $("mObjective").textContent=me.objetivo||"Objetivo no asignado";$("mColor").style.background=me.color;
@@ -177,7 +178,7 @@ function renderMobile(s){
 }
 async function createRoom(){
  try{await signInAnonymously(auth);playerId=auth.currentUser.uid;isHost=true;sala=randomCode();
- const p={};p[playerId]={nombre:"TV / Anfitrión",color:COLORS[0],dadoSorteo:0,fichasParaColocar:0,objetivo:""};
+ const p={};
  await setDoc(roomRef(),{estado:"lobby",fase:"lobby",hostId:playerId,jugadores:p,paises:{},turnoActual:"",ronda:1,registro:["Sala creada."],createdAt:serverTimestamp()});
  show("lobby");$("roomCode").textContent=sala;$("tvRoom").textContent="Sala "+sala;
  $("qr").innerHTML="";const qrUrl=location.href.split("?")[0]+"?sala="+sala;
@@ -187,16 +188,44 @@ async function createRoom(){
 }
 async function joinRoom(code,name,errId){
  try{clearErr(errId);if(!code||!name.trim())throw Error("Ingresá el código y tu nombre.");await signInAnonymously(auth);playerId=auth.currentUser.uid;sala=code.toUpperCase();isHost=false;
- const ref=roomRef();await runTransaction(db,async tx=>{const snap=await tx.get(ref);if(!snap.exists())throw Error("No existe esa sala.");const s=snap.data();if(s.estado!=="lobby")throw Error("La partida ya comenzó.");const players=s.jugadores||{};if(players[playerId])return;if(Object.keys(players).length>=4)throw Error("La sala está completa (máximo 4 jugadores).");const color=COLORS.find(c=>!Object.values(players).some(p=>p.color===c))||COLORS[0];const objective=pickObjective(Object.keys(players).length);tx.update(ref,{[`jugadores.${playerId}`]:{nombre:name.trim().slice(0,24),color,dadoSorteo:0,fichasParaColocar:0,objetivo:objective}})});
+ const ref=roomRef();await runTransaction(db,async tx=>{const snap=await tx.get(ref);if(!snap.exists())throw Error("No existe esa sala.");const s=snap.data();if(s.estado!=="lobby")throw Error("La partida ya comenzó.");const players=s.jugadores||{};if(players[playerId])return;if(Object.keys(players).length>=4)throw Error("La sala está completa (máximo 4 jugadores).");const color=COLORS.find(c=>!Object.values(players).some(p=>p.color===c))||COLORS[0];const objective=pickObjective(Object.keys(players).length);tx.update(ref,{[`jugadores.${playerId}`]:{nombre:name.trim().slice(0,24),color,dadoSorteo:0,fichasParaColocar:0,objetivo:"",objetivoCont:[]}})});
  show("mobile");$("mobileLogin").classList.add("hidden");$("mobileGame").classList.remove("hidden");listenRoom();
  }catch(e){err(errId,e.message||"No se pudo conectar.")}
 }
 function pickObjective(i){return "Objetivo común: ocupar 20 países (2 jugadores), 14 (3) o 12 (4). Los objetivos secretos de las tarjetas todavía no están cargados."}
 function listenRoom(){if(unsubscribe)unsubscribe();unsubscribe=onSnapshot(roomRef(),snap=>{if(!snap.exists())return;const s=snap.data();live=s;if(s.estado==="lobby"){if(isHost){show("lobby");renderLobby(s)}else{show("mobile");$("mobileLogin").classList.add("hidden");$("mobileGame").classList.remove("hidden");renderMobile(s)}}else{if(isHost)show("tvGame");else show("mobile");if(isHost)renderGame(s);else renderMobile(s)}},e=>{if(isHost)err("homeError","Error de Firebase: "+e.message);else err("mError","Error de Firebase: "+e.message)})}
+const OBJETIVOS=[
+{t:"Ocupar América del Norte y Europa",c:["América del Norte","Europa"]},
+{t:"Ocupar América del Sur, África y Oceanía",c:["América del Sur","África","Oceanía"]},
+{t:"Ocupar Asia y Oceanía",c:["Asia","Oceanía"]},
+{t:"Ocupar Asia y América del Sur",c:["Asia","América del Sur"]},
+{t:"Ocupar África y Europa",c:["África","Europa"]}];
+let sorteoBusy=false;
+function winCheck(s,to){const id=playerId,pm={...s.paises,[to]:{...s.paises[to],duenio:id}},n=Object.values(pm).filter(p=>p.duenio===id).length,oc=s.jugadores[id].objetivoCont||[],obj=oc.length>0&&oc.every(c=>CONTINENTS[c].every(x=>pm[x]?.duenio===id));return (n>=(GOAL[Object.keys(s.jugadores).length]||12)||obj)?{estado:"fin",fase:"fin",ganador:id}:{}}
+function renderGame(s){renderGameBase(s);sorteoTV(s)}
+function renderMobile(s){renderMobileBase(s);const me=s.jugadores?.[playerId];if(!me)return;
+ $("mObjective").textContent=me.objetivo||"Se te repartirá después del sorteo";
+ const sor=s.fase==="sorteo";$("sorteoCard").classList.toggle("hidden",!(sor&&!me.dadoSorteo));
+ if(sor){$("mStatus").textContent="Sorteo inicial";$("mMessage").textContent=me.dadoSorteo?`Sacaste ${me.dadoSorteo}. Mirá la TV.`:"Tirá el dado: empieza el que saque más."}}
+function sorteoTV(s){
+ if(s.fase!=="sorteo")return;
+ const J=s.jugadores||{},ids=Object.keys(J);
+ $("tvStatus").textContent="Sorteo: tiren el dado desde el celular";$("tvCurrent").textContent="Empieza el que saque el número más alto";
+ $("tvBattle").innerHTML=ids.map(id=>`<div class="player-row"><span class="dot" style="background:${J[id].color}"></span><span class="name">${escapeHtml(J[id].nombre)}</span><strong>${J[id].dadoSorteo||"?"}</strong></div>`).join("");
+ if(sorteoBusy||!ids.length||ids.some(id=>!J[id].dadoSorteo))return;
+ sorteoBusy=true;
+ const max=Math.max(...ids.map(id=>J[id].dadoSorteo)),tops=ids.filter(id=>J[id].dadoSorteo===max);
+ if(tops.length>1){$("tvStatus").textContent="¡Empate! Vuelven a tirar los empatados";
+  setTimeout(async()=>{try{await runTransaction(db,async tx=>{const ref=roomRef(),snap=await tx.get(ref),d=snap.data();if(d.fase!=="sorteo")return;const u={};tops.forEach(id=>u[`jugadores.${id}.dadoSorteo`]=0);tx.update(ref,u)})}catch(e){}sorteoBusy=false},3000);return}
+ const w=tops[0];$("tvStatus").textContent="Empieza "+J[w].nombre;
+ setTimeout(async()=>{try{await runTransaction(db,async tx=>{const ref=roomRef(),snap=await tx.get(ref),d=snap.data();if(d.fase!=="sorteo")return;
+  const order=d.turnOrder||Object.keys(d.jugadores),k=order.indexOf(w),rot=[...order.slice(k),...order.slice(0,k)],goal=GOAL[order.length]||12,obj=shuffle([...OBJETIVOS]),u={fase:"incorporacion",turnoActual:w,turnOrder:rot,registro:addLog(d.registro,`${d.jugadores[w].nombre} empieza la partida.`)};
+  order.forEach((id,i)=>{u[`jugadores.${id}.objetivo`]=`${obj[i].t} · Objetivo común: ${goal} países`;u[`jugadores.${id}.objetivoCont`]=obj[i].c});
+  u[`jugadores.${w}.fichasParaColocar`]=6;tx.update(ref,u)})}catch(e){alert(e.message)}sorteoBusy=false},3000)}
 async function startGame(){
- const ref=roomRef();try{await runTransaction(db,async tx=>{const snap=await tx.get(ref);if(!snap.exists())throw Error("No existe la sala");const s=snap.data(),players={...s.jugadores},ids=Object.keys(players);if(ids.length<2)throw Error("Se necesitan al menos 2 jugadores");const shuffled=shuffle([...ALL]);const countries={};shuffled.forEach((n,i)=>countries[n]={duenio:ids[i%ids.length],fichas:1});const first=ids[Math.floor(Math.random()*ids.length)];players[first].fichasParaColocar=6;tx.update(ref,{estado:"jugando",fase:"incorporacion",paises:countries,turnoActual:first,ronda:1,registro:addLog(s.registro,"Comenzó la partida. Cada jugador recibe territorios al azar."),turnOrder:ids})});show("tvGame")}catch(e){alert(e.message)}
+ const ref=roomRef();try{await runTransaction(db,async tx=>{const snap=await tx.get(ref);if(!snap.exists())throw Error("No existe la sala");const s=snap.data(),players={...s.jugadores},ids=Object.keys(players);if(ids.length<2)throw Error("Se necesitan al menos 2 jugadores");const shuffled=shuffle([...ALL]);const countries={};shuffled.forEach((n,i)=>countries[n]={duenio:ids[i%ids.length],fichas:1});ids.forEach(i=>{players[i].dadoSorteo=0;players[i].objetivo="";players[i].fichasParaColocar=0});tx.update(ref,{estado:"jugando",fase:"sorteo",paises:countries,jugadores:players,turnoActual:"",ronda:1,registro:addLog(s.registro,"Sorteo: cada jugador tira un dado desde su celular. Empieza el que saque más."),turnOrder:ids})});show("tvGame")}catch(e){alert(e.message)}
 }
-async function placeArmies(){const country=$("mReinforceCountry").value,n=Number($("mReinforceAmount").value);if(!country||!Number.isInteger(n)||n<1)return alert("Elegí país y cantidad válida.");try{await runTransaction(db,async tx=>{const ref=roomRef(),snap=await tx.get(ref);const s=snap.data(),me=s.jugadores[playerId],p=s.paises[country];if(s.fase!=="incorporacion"||s.turnoActual!==playerId)throw Error("No es tu fase de incorporación.");if(!p||p.duenio!==playerId)throw Error("Ese territorio no es tuyo.");if(n>me.fichasParaColocar)throw Error("No tenés tantos ejércitos.");tx.update(ref,{[`paises.${country}.fichas`]:p.fichas+n,[`jugadores.${playerId}.fichasParaColocar`]:me.fichasParaColocar-n,registro:addLog(s.registro,`${me.nombre} colocó ${n} ejército(s) en ${country}.`)})});$("mReinforceAmount").value=1}catch(e){alert(e.message)}}
+async function placeArmies(){const country=$("mReinforceCountry").value,n=Number($("mReinforceAmount").value);if(!country||!Number.isInteger(n)||n<1)return alert("Elegí país y cantidad válida.");try{await runTransaction(db,async tx=>{const ref=roomRef(),snap=await tx.get(ref);const s=snap.data(),me=s.jugadores[playerId],p=s.paises[country];if(s.fase!=="incorporacion"||s.turnoActual!==playerId)throw Error("No es tu fase de incorporación.");if(!p||p.duenio!==playerId)throw Error("Ese territorio no es tuyo.");if(n>me.fichasParaColocar)throw Error("No tenés tantos ejércitos.");tx.update(ref,{[`paises.${country}.fichas`]:p.fichas+n,[`jugadores.${playerId}.fichasParaColocar`]:me.fichasParaColocar-n,...(me.fichasParaColocar-n===0?{fase:"ataque"}:{}),registro:addLog(s.registro,`${me.nombre} colocó ${n} ejército(s) en ${country}.`)})});$("mReinforceAmount").value=1}catch(e){alert(e.message)}}
 async function finishReinforcements(){try{await runTransaction(db,async tx=>{const ref=roomRef(),snap=await tx.get(ref),s=snap.data(),me=s.jugadores[playerId];if(s.turnoActual!==playerId||s.fase!=="incorporacion")throw Error("No es tu turno.");if(me.fichasParaColocar>0)throw Error("Primero colocá todos tus ejércitos.");tx.update(ref,{fase:"ataque",registro:addLog(s.registro,`${me.nombre} terminó la incorporación.`)})})}catch(e){alert(e.message)}}
 function roll(n){return Array.from({length:n},()=>Math.floor(Math.random()*6)+1).sort((a,b)=>b-a)}
 async function attack(){
@@ -205,7 +234,7 @@ async function attack(){
  pendingBattle=result;if(result.conquered){$("mBattleResult").textContent="¡Conquista! Elegí cuántos ejércitos mover al territorio conquistado.";const move=prompt("¿Cuántos ejércitos mover desde "+from+" a "+to+"? (mínimo 1)", "1");const count=Number(move);if(Number.isInteger(count)&&count>=1)await confirmConquest(result,count)}else $("mBattleResult").textContent="Ataque resuelto. Revisá el resultado en la TV.";
  }catch(e){alert(e.message||"No se pudo ejecutar el ataque.")}
 }
-async function confirmConquest(battle,count){try{await runTransaction(db,async tx=>{const ref=roomRef(),snap=await tx.get(ref),s=snap.data(),b=s.ultimoCombate;if(!b||b.id!==battle.id||!b.conquistaPendiente||b.atacanteId!==playerId)throw Error("La conquista ya fue resuelta.");const a=s.paises[b.from],d=s.paises[b.to];if(a.duenio!==playerId||d.duenio===playerId)throw Error("Estado de territorios inválido.");if(count<1||count>=a.fichas)throw Error("Tenés que mover al menos 1 ejército y dejar al menos 1 en el origen.");tx.update(ref,{[`paises.${b.from}.fichas`]:a.fichas-count,[`paises.${b.to}.duenio`]:playerId,[`paises.${b.to}.fichas`]:count,...(owned(s,playerId).length+1>=(GOAL[Object.keys(s.jugadores).length]||12)?{estado:"fin",fase:"fin",ganador:playerId}:{}),ultimoCombate:{...b,conquistaPendiente:false,texto:b.texto+" Ejército(s) trasladados: "+count+"."},registro:addLog(s.registro,`${s.jugadores[playerId].nombre} conquistó ${b.to}.`)})});$("mConquerBtn").classList.add("hidden")}catch(e){alert(e.message)}}
+async function confirmConquest(battle,count){try{await runTransaction(db,async tx=>{const ref=roomRef(),snap=await tx.get(ref),s=snap.data(),b=s.ultimoCombate;if(!b||b.id!==battle.id||!b.conquistaPendiente||b.atacanteId!==playerId)throw Error("La conquista ya fue resuelta.");const a=s.paises[b.from],d=s.paises[b.to];if(a.duenio!==playerId||d.duenio===playerId)throw Error("Estado de territorios inválido.");if(count<1||count>=a.fichas)throw Error("Tenés que mover al menos 1 ejército y dejar al menos 1 en el origen.");tx.update(ref,{[`paises.${b.from}.fichas`]:a.fichas-count,[`paises.${b.to}.duenio`]:playerId,[`paises.${b.to}.fichas`]:count,...winCheck(s,b.to),ultimoCombate:{...b,conquistaPendiente:false,texto:b.texto+" Ejército(s) trasladados: "+count+"."},registro:addLog(s.registro,`${s.jugadores[playerId].nombre} conquistó ${b.to}.`)})});$("mConquerBtn").classList.add("hidden")}catch(e){alert(e.message)}}
 async function endTurn(){try{await runTransaction(db,async tx=>{const ref=roomRef(),snap=await tx.get(ref),s=snap.data();if(s.turnoActual!==playerId||s.fase!=="ataque")throw Error("No es tu turno.");if(s.ultimoCombate?.conquistaPendiente)throw Error("Confirmá el traslado de ejércitos antes de terminar.");const ids=(s.turnOrder||Object.keys(s.jugadores)).filter(id=>s.jugadores[id]&&owned(s,id).length>0);let idx=ids.indexOf(playerId),next=ids[(idx+1)%ids.length],round=s.ronda||1;if(idx===ids.length-1)round++;const countries=s.paises;const nCountries=owned(s,next).length;const reinforcements=bonusFor(s,next);const players={...s.jugadores};players[next]={...players[next],fichasParaColocar:reinforcements};tx.update(ref,{turnoActual:next,fase:"incorporacion",ronda:round,jugadores:players,registro:addLog(s.registro,`${s.jugadores[playerId].nombre} terminó su turno. Le toca a ${players[next].nombre} con ${reinforcements} ejércitos.`)})})}catch(e){alert(e.message)}}
 $("hostBtn").addEventListener("click",createRoom);
 $("showJoinBtn").addEventListener("click",()=>{$("joinBox").classList.toggle("hidden")});
@@ -216,12 +245,13 @@ $("cancelHostBtn").addEventListener("click",()=>{if(unsubscribe)unsubscribe();sh
 $("mPlaceBtn").addEventListener("click",placeArmies);
 $("mAttackBtn").addEventListener("click",attack);
 $("mConquerBtn").addEventListener("click",()=>{if(pendingBattle){const c=Number(prompt("¿Cuántos ejércitos trasladás? (mínimo 1 y dejando 1 en el origen)","1"));if(Number.isInteger(c))confirmConquest(pendingBattle,c)}});
-$("mSkipAttackBtn").addEventListener("click",finishReinforcements);
+$("mSkipAttackBtn").addEventListener("click",endTurn);
 $("endTurnBtn").addEventListener("click",endTurn);
 $("mFrom").addEventListener("change",()=>{selectedFrom=$("mFrom").value;populateAttackSelects();if(live)renderMap(live)});
 $("mTo").addEventListener("change",()=>{selectedTo=$("mTo").value;if(live)renderMap(live)});
 $("backHomeBtn").addEventListener("click",()=>{if(unsubscribe)unsubscribe();show("home")});
 $("mLeaveBtn").addEventListener("click",()=>{if(unsubscribe)unsubscribe();playerId="";show("home")});
+$("sorteoBtn").addEventListener("click",async()=>{try{await runTransaction(db,async tx=>{const ref=roomRef(),snap=await tx.get(ref),d=snap.data();if(d.fase!=="sorteo"||d.jugadores[playerId]?.dadoSorteo)return;tx.update(ref,{[`jugadores.${playerId}.dadoSorteo`]:1+Math.floor(Math.random()*6)})})}catch(e){alert(e.message)}});
 const params=new URLSearchParams(location.search);if(params.get("sala")){$("home").classList.add("hidden");$("mobile").classList.remove("hidden");$("mobileLogin").classList.remove("hidden");$("mCode").value=params.get("sala").toUpperCase()}
 </script>
 </body>
