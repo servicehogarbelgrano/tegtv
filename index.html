@@ -1,0 +1,244 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>TEG TV</title>
+    <!-- Librería para generar el QR en la TV -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
+        body { background-color: #121212; color: #ffffff; overflow: hidden; }
+        
+        /* PANTALLA DE SELECCIÓN (HOST/CLIENTE) */
+        #mode-selector { display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100vh; text-align: center; }
+        .btn { padding: 15px 30px; margin: 10px; font-size: 1.2rem; cursor: pointer; border: none; border-radius: 8px; background: #d32f2f; color: white; font-weight: bold; }
+        .btn:hover { background: #b71c1c; }
+        .btn:disabled { background: #555; cursor: not-allowed; }
+
+        /* PANTALLA DE TV (HOST) */
+        #tv-container { display: none; width: 100vw; height: 100vh; background: url('https://i.imgur.com/K1b5R9d.jpg') no-repeat center center; background-size: cover; position: relative; }
+        #tv-lobby { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); background: rgba(0,0,0,0.85); padding: 40px; border-radius: 15px; text-align: center; border: 2px solid #d32f2f; }
+        #qr-code { background: white; padding: 15px; margin: 20px auto; width: fit-content; border-radius: 10px; }
+        .sala-codigo { font-size: 4rem; color: #ffeb3b; letter-spacing: 5px; margin: 10px 0; font-weight: bold; }
+        #tv-players { display: flex; gap: 15px; justify-content: center; margin-top: 20px; }
+        .player-badge { background: #333; padding: 10px 20px; border-radius: 20px; font-size: 1.2rem; }
+        #tv-game { display: none; position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.6); padding: 20px; }
+        .tv-status-bar { background: #222; padding: 15px; text-align: center; font-size: 1.5rem; border-bottom: 3px solid #d32f2f; }
+
+        /* PANTALLA DE CELULAR (CLIENTE) */
+        #mobile-container { display: none; width: 100vw; height: 100vh; flex-direction: column; background-color: #1e1e1e; }
+        .mobile-header { background: #d32f2f; padding: 15px; text-align: center; font-size: 1.2rem; font-weight: bold; }
+        .mobile-content { flex: 1; padding: 20px; overflow-y: auto; display: flex; flex-direction: column; gap: 15px; }
+        input[type="text"] { width: 100%; padding: 15px; font-size: 1.2rem; border-radius: 8px; border: 1px solid #555; background: #333; color: white; text-align: center; margin-bottom: 15px; }
+        .card { background: #2c2c2c; padding: 20px; border-radius: 10px; border-left: 5px solid #d32f2f; }
+        .status-msg { text-align: center; font-size: 1.5rem; color: #ffeb3b; margin: 20px 0; padding: 20px; background: rgba(255, 235, 59, 0.1); border-radius: 10px; }
+    </style>
+</head>
+<body>
+
+    <!-- SELECTOR DE MODO (Se oculta automático si hay código en la URL) -->
+    <div id="mode-selector">
+        <h1 style="font-size: 3rem; margin-bottom: 10px;">TEG</h1>
+        <p style="margin-bottom: 30px; color: #aaa;">Seleccioná dónde estás abriendo el juego</p>
+        <button class="btn" id="btn-tv">Abrir en Televisor (Crear Sala)</button>
+        <button class="btn" id="btn-mobile-manual" style="background: #1976d2;">Entrar desde Celular</button>
+    </div>
+
+    <!-- INTERFAZ TELEVISIÓN -->
+    <div id="tv-container">
+        <div id="tv-lobby">
+            <h2>Lobby de Espera</h2>
+            <p>Escaneá para unirte o entrá a esta web y poné el código:</p>
+            <div class="sala-codigo" id="tv-sala-id">----</div>
+            <div id="qr-code"></div>
+            <div id="tv-players"></div>
+            <button class="btn" id="btn-start-game" style="display:none; margin-top: 20px;">Comenzar Partida</button>
+        </div>
+        <div id="tv-game">
+            <div class="tv-status-bar" id="tv-status">Iniciando juego...</div>
+            <!-- Acá iría el renderizado del mapa completo y las fichas -->
+        </div>
+    </div>
+
+    <!-- INTERFAZ CELULAR -->
+    <div id="mobile-container">
+        <div class="mobile-header" id="mobile-header-title">TEG - Conectando...</div>
+        <div class="mobile-content" id="mobile-login">
+            <input type="text" id="mob-sala" placeholder="Código de Sala" maxlength="4" style="text-transform: uppercase;">
+            <input type="text" id="mob-nombre" placeholder="Tu Nombre">
+            <button class="btn" id="btn-join">Unirse a la partida</button>
+        </div>
+        <div class="mobile-content" id="mobile-game" style="display:none;">
+            <div class="card">
+                <h3 style="color: #ffeb3b; margin-bottom: 10px;">Tu Objetivo Secreto</h3>
+                <p id="mob-objetivo">Cargando objetivo...</p>
+            </div>
+            <div id="mob-action-area">
+                <div class="status-msg" id="mob-status-msg">Esperando a que el anfitrión inicie la partida...</div>
+                <button class="btn" id="btn-roll-dice" style="display:none; width: 100%; background: #4caf50;">Tirar Dado para Empezar</button>
+                <button class="btn" id="btn-attack" style="display:none; width: 100%;">Atacar</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- FIREBASE MODULES -->
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.4.0/firebase-app.js";
+        import { getFirestore, doc, setDoc, onSnapshot, updateDoc } from "https://www.gstatic.com/firebasejs/10.4.0/firebase-firestore.js";
+        import { getAuth, signInAnonymously } from "https://www.gstatic.com/firebasejs/10.4.0/firebase-auth.js";
+
+        // TU CONFIGURACIÓN EXACTA DE FIREBASE
+        const firebaseConfig = {
+            apiKey: "AIzaSyDnQsK7jNVciU2Ruo-mwELvFR97S6tNhgg",
+            authDomain: "teg-tv.firebaseapp.com",
+            projectId: "teg-tv",
+            storageBucket: "teg-tv.firebasestorage.app",
+            messagingSenderId: "735650643113",
+            appId: "1:735650643113:web:e0ad00556934ce48773db8"
+        };
+
+        const app = initializeApp(firebaseConfig);
+        const db = getFirestore(app);
+        const auth = getAuth(app);
+
+        let currentSala = "";
+        let isHost = false;
+        let playerId = "";
+        const urlParams = new URLSearchParams(window.location.search);
+        const urlSala = urlParams.get('sala');
+
+        // ROUTING AUTOMÁTICO
+        if (urlSala) {
+            document.getElementById('mode-selector').style.display = 'none';
+            document.getElementById('mobile-container').style.display = 'flex';
+            document.getElementById('mob-sala').value = urlSala;
+            document.getElementById('mob-sala').disabled = true;
+        }
+
+        // --- LÓGICA HOST (TV) ---
+        document.getElementById('btn-tv').addEventListener('click', async () => {
+            isHost = true;
+            document.getElementById('mode-selector').style.display = 'none';
+            document.getElementById('tv-container').style.display = 'block';
+            
+            // Generar código aleatorio
+            currentSala = Math.random().toString(36).substring(2, 6).toUpperCase();
+            document.getElementById('tv-sala-id').innerText = currentSala;
+            
+            // Generar QR
+            const gameUrl = window.location.href.split('?')[0] + "?sala=" + currentSala;
+            new QRCode(document.getElementById("qr-code"), { text: gameUrl, width: 200, height: 200 });
+
+            // Crear sala en Firestore
+            await setDoc(doc(db, "salas", currentSala), {
+                estado: "lobby", // lobby, sorteo, turnos
+                jugadores: {},
+                turnoActual: ""
+            });
+
+            // Escuchar jugadores
+            onSnapshot(doc(db, "salas", currentSala), (docSnap) => {
+                const data = docSnap.data();
+                if(!data) return;
+                
+                const playersDiv = document.getElementById('tv-players');
+                playersDiv.innerHTML = "";
+                const jugadores = Object.values(data.jugadores || {});
+                
+                jugadores.forEach(j => {
+                    playersDiv.innerHTML += `<div class="player-badge">${j.nombre}</div>`;
+                });
+
+                if (jugadores.length >= 2 && data.estado === "lobby") {
+                    document.getElementById('btn-start-game').style.display = "inline-block";
+                }
+            });
+        });
+
+        // Iniciar Juego (TV)
+        document.getElementById('btn-start-game').addEventListener('click', async () => {
+            document.getElementById('tv-lobby').style.display = 'none';
+            document.getElementById('tv-game').style.display = 'block';
+            
+            await updateDoc(doc(db, "salas", currentSala), {
+                estado: "sorteo",
+                mensaje: "Tirando dados para ver quién empieza..."
+            });
+            document.getElementById('tv-status').innerText = "Esperando que los jugadores tiren los dados...";
+        });
+
+        // --- LÓGICA CLIENTE (CELULAR) ---
+        document.getElementById('btn-mobile-manual').addEventListener('click', () => {
+            document.getElementById('mode-selector').style.display = 'none';
+            document.getElementById('mobile-container').style.display = 'flex';
+        });
+
+        document.getElementById('btn-join').addEventListener('click', async () => {
+            currentSala = document.getElementById('mob-sala').value.toUpperCase();
+            const nombre = document.getElementById('mob-nombre').value;
+            if(!currentSala || !nombre) return alert("Completá los datos");
+
+            await signInAnonymously(auth);
+            playerId = auth.currentUser.uid;
+            
+            document.getElementById('mobile-login').style.display = 'none';
+            document.getElementById('mobile-game').style.display = 'flex';
+            document.getElementById('mobile-header-title').innerText = "Jugador: " + nombre;
+
+            // Objetivos aleatorios básicos
+            const objetivos = [
+                "Ocupar África y 5 países de América del Norte.",
+                "Ocupar América del Sur, 7 países de Europa y 3 limítrofes.",
+                "Ocupar Asia y 2 países de América del Sur.",
+                "Ocupar Europa, 4 países de Asia y 2 países de América del Sur."
+            ];
+            const miObjetivo = objetivos[Math.floor(Math.random() * objetivos.length)];
+            document.getElementById('mob-objetivo').innerText = miObjetivo;
+
+            // Unirse a la sala en Firestore
+            const salaRef = doc(db, "salas", currentSala);
+            await setDoc(salaRef, {
+                jugadores: {
+                    [playerId]: { nombre: nombre, objetivo: miObjetivo, dadoSorteo: 0 }
+                }
+            }, { merge: true });
+
+            // Escuchar estado del juego
+            onSnapshot(salaRef, (docSnap) => {
+                const data = docSnap.data();
+                if(!data) return;
+
+                const msgDiv = document.getElementById('mob-status-msg');
+                const btnRoll = document.getElementById('btn-roll-dice');
+
+                if (data.estado === "lobby") {
+                    msgDiv.innerText = "Esperando que el Host inicie la partida...";
+                    msgDiv.style.display = "block";
+                    btnRoll.style.display = "none";
+                } else if (data.estado === "sorteo") {
+                    if (data.jugadores[playerId].dadoSorteo === 0) {
+                        msgDiv.style.display = "none";
+                        btnRoll.style.display = "block";
+                    } else {
+                        btnRoll.style.display = "none";
+                        msgDiv.innerText = `Sacaste un ${data.jugadores[playerId].dadoSorteo}. Esperando a los demás...`;
+                        msgDiv.style.display = "block";
+                    }
+                }
+            });
+        });
+
+        // Tirar dado celular
+        document.getElementById('btn-roll-dice').addEventListener('click', async () => {
+            const resultado = Math.floor(Math.random() * 6) + 1;
+            const salaRef = doc(db, "salas", currentSala);
+            await setDoc(salaRef, {
+                jugadores: {
+                    [playerId]: { dadoSorteo: resultado }
+                }
+            }, { merge: true });
+        });
+    </script>
+</body>
+</html>
