@@ -295,12 +295,12 @@
         });
 
         document.getElementById('btn-roll-dice').addEventListener('click', async () => {
-            const resultado = Math.floor(Math.random() * 6) + 1;
-            const salaRef = doc(db, "salas", currentSala);
-            await setDoc(salaRef, {
-                [`jugadores.${playerId}.dadoSorteo`]: resultado
-            }, { merge: true });
-        });
+    const resultado = Math.floor(Math.random() * 6) + 1;
+    const salaRef = doc(db, "salas", currentSala);
+    await updateDoc(salaRef, {
+        [`jugadores.${playerId}.dadoSorteo`]: resultado
+    });
+});
     </script>
 </body>
 </html>
