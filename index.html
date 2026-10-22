@@ -7,29 +7,30 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
     <style>
         * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
-        body { background-color: #121212; color: #ffffff; overflow: hidden; }
+        /* Cambiamos el fondo roto por un gris oscuro limpio */
+        body { background-color: #1a1a1a; color: #ffffff; overflow: hidden; }
         
         #mode-selector { display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100vh; text-align: center; }
         .btn { padding: 15px 30px; margin: 10px; font-size: 1.2rem; cursor: pointer; border: none; border-radius: 8px; background: #d32f2f; color: white; font-weight: bold; transition: 0.3s; }
         .btn:hover { background: #b71c1c; transform: scale(1.05); }
 
-        /* PANTALLA DE TV (HOST) CON FONDO DE MAPA */
-        #tv-container { display: none; width: 100vw; height: 100vh; background: url('https://i.imgur.com/K1b5R9d.jpg') no-repeat center center; background-size: cover; position: relative; }
+        #tv-container { display: none; width: 100vw; height: 100vh; position: relative; }
         
-        /* CUADRO DE LOBBY MÁS TRANSPARENTE */
-        #tv-lobby { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); background: rgba(0, 0, 0, 0.75); padding: 40px; border-radius: 15px; text-align: center; border: 2px solid #d32f2f; box-shadow: 0 0 30px rgba(0,0,0,0.8); backdrop-filter: blur(5px); width: 80%; max-width: 800px; }
+        #tv-lobby { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); background: rgba(0, 0, 0, 0.85); padding: 40px; border-radius: 15px; text-align: center; border: 2px solid #d32f2f; box-shadow: 0 0 30px rgba(0,0,0,0.8); width: 80%; max-width: 800px; }
         
         #qr-code { background: white; padding: 15px; margin: 20px auto; width: fit-content; border-radius: 10px; }
         .sala-codigo { font-size: 5rem; color: #ffeb3b; letter-spacing: 10px; margin: 10px 0; font-weight: bold; text-shadow: 2px 2px 5px #000; }
         
-        /* ESTADO DE CONEXIÓN */
-        #tv-connection-status { font-size: 2rem; color: #4caf50; margin-bottom: 20px; min-height: 70px; text-shadow: 1px 1px 3px #000; }
+        #tv-connection-status { font-size: 2rem; color: #4caf50; margin-bottom: 20px; min-height: 70px; }
         
         #tv-players { display: flex; flex-wrap: wrap; gap: 15px; justify-content: center; margin-top: 20px; min-height: 50px; }
-        .player-badge { background: #d32f2f; padding: 10px 25px; border-radius: 20px; font-size: 1.5rem; font-weight: bold; box-shadow: 2px 2px 10px rgba(0,0,0,0.5); }
+        .player-badge { background: #d32f2f; padding: 10px 25px; border-radius: 20px; font-size: 1.5rem; font-weight: bold; }
         
-        #tv-game { display: none; position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.4); padding: 20px; }
-        .tv-status-bar { background: rgba(34, 34, 34, 0.9); padding: 15px; text-align: center; font-size: 1.5rem; border-bottom: 3px solid #d32f2f; }
+        #tv-game { display: none; position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: #222; }
+        .tv-status-bar { background: rgba(0, 0, 0, 0.9); padding: 20px; text-align: center; font-size: 2rem; border-bottom: 3px solid #d32f2f; color: #fff; }
+
+        .dado-resultado { background: #333; padding: 30px; border-radius: 15px; text-align: center; width: 250px; border: 2px solid #555; }
+        .dado-numero { font-size: 6rem; color: #ffeb3b; font-weight: bold; margin-top: 10px; }
 
         /* PANTALLA DE CELULAR (CLIENTE) */
         #mobile-container { display: none; width: 100vw; height: 100vh; flex-direction: column; background-color: #1e1e1e; }
@@ -52,9 +53,7 @@
     <!-- INTERFAZ TELEVISIÓN -->
     <div id="tv-container">
         <div id="tv-lobby">
-            <!-- MENSAJE DINÁMICO DE CONEXIÓN -->
             <div id="tv-connection-status">Esperando que se conecte el primer jugador...</div>
-            
             <div style="display: flex; justify-content: center; align-items: center; gap: 40px;">
                 <div id="qr-code"></div>
                 <div>
@@ -62,13 +61,15 @@
                     <div class="sala-codigo" id="tv-sala-id">----</div>
                 </div>
             </div>
-            
             <div id="tv-players"></div>
             <button class="btn" id="btn-start-game" style="display:none; margin-top: 30px; font-size: 1.5rem; padding: 15px 40px; background: #4caf50;">Comenzar Partida</button>
         </div>
         
         <div id="tv-game">
             <div class="tv-status-bar" id="tv-status">Iniciando juego...</div>
+            <div id="tv-dados-area" style="display: flex; justify-content: center; gap: 40px; flex-wrap: wrap; margin-top: 60px; padding: 20px;">
+                <!-- Acá van a aparecer los dados grandes -->
+            </div>
         </div>
     </div>
 
@@ -87,7 +88,7 @@
             </div>
             <div id="mob-action-area">
                 <div class="status-msg" id="mob-status-msg">Esperando a que el anfitrión inicie la partida...</div>
-                <button class="btn" id="btn-roll-dice" style="display:none; width: 100%; background: #4caf50; font-size: 1.5rem;">Tirar Dado para Empezar</button>
+                <button class="btn" id="btn-roll-dice" style="display:none; width: 100%; background: #4caf50; font-size: 1.5rem; padding: 20px;">Tirar Dado para Empezar</button>
             </div>
         </div>
     </div>
@@ -147,26 +148,82 @@
                 const data = docSnap.data();
                 if(!data) return;
                 
-                const playersDiv = document.getElementById('tv-players');
-                const statusDiv = document.getElementById('tv-connection-status');
-                playersDiv.innerHTML = "";
-                
                 const jugadores = Object.values(data.jugadores || {});
                 const cantidadActual = jugadores.length;
-                
-                jugadores.forEach(j => {
-                    playersDiv.innerHTML += `<div class="player-badge">${j.nombre}</div>`;
-                });
 
-                // Detectar nuevos jugadores para actualizar el mensaje principal
-                if (cantidadActual > cantidadAnterior) {
-                    const ultimoJugador = jugadores[cantidadActual - 1].nombre;
-                    statusDiv.innerHTML = `¡Se conectó <span style="color: #ffeb3b; font-weight: bold;">${ultimoJugador}</span>!<br><span style="font-size: 1.5rem; color: #ddd;">Esperando al que sigue...</span>`;
+                // Lógica de Lobby
+                if (data.estado === "lobby") {
+                    const playersDiv = document.getElementById('tv-players');
+                    const statusDiv = document.getElementById('tv-connection-status');
+                    playersDiv.innerHTML = "";
+                    
+                    jugadores.forEach(j => {
+                        playersDiv.innerHTML += `<div class="player-badge">${j.nombre}</div>`;
+                    });
+
+                    if (cantidadActual > cantidadAnterior) {
+                        const ultimoJugador = jugadores[cantidadActual - 1].nombre;
+                        statusDiv.innerHTML = `¡Se conectó <span style="color: #ffeb3b; font-weight: bold;">${ultimoJugador}</span>!<br><span style="font-size: 1.5rem; color: #ddd;">Esperando al que sigue...</span>`;
+                    }
+                    cantidadAnterior = cantidadActual;
+
+                    if (cantidadActual >= 2) {
+                        document.getElementById('btn-start-game').style.display = "inline-block";
+                    }
                 }
-                cantidadAnterior = cantidadActual;
 
-                if (cantidadActual >= 2 && data.estado === "lobby") {
-                    document.getElementById('btn-start-game').style.display = "inline-block";
+                // Lógica de Sorteo (Nueva inteligencia de la TV)
+                if (data.estado === "sorteo") {
+                    const dadosArea = document.getElementById('tv-dados-area');
+                    const tvStatus = document.getElementById('tv-status');
+                    dadosArea.innerHTML = "";
+                    
+                    let todosTiraron = true;
+                    let numeroMaximo = 0;
+                    let ganador = "";
+                    let empate = false;
+
+                    jugadores.forEach(j => {
+                        // Dibujar los cuadros de los dados en la TV
+                        let valorDado = j.dadoSorteo > 0 ? j.dadoSorteo : "?";
+                        dadosArea.innerHTML += `
+                            <div class="dado-resultado">
+                                <h2 style="font-size: 2rem;">${j.nombre}</h2>
+                                <div class="dado-numero">${valorDado}</div>
+                            </div>
+                        `;
+
+                        // Verificar si falta alguien tirar
+                        if (j.dadoSorteo === 0 || j.dadoSorteo === undefined) {
+                            todosTiraron = false;
+                        } else {
+                            // Calcular el ganador
+                            if (j.dadoSorteo > numeroMaximo) {
+                                numeroMaximo = j.dadoSorteo;
+                                ganador = j.nombre;
+                                empate = false;
+                            } else if (j.dadoSorteo === numeroMaximo) {
+                                empate = true;
+                            }
+                        }
+                    });
+
+                    // Cambiar el mensaje de la TV según los resultados
+                    if (todosTiraron) {
+                        if (empate) {
+                            tvStatus.innerHTML = `¡Empate con un <span style="color:#ffeb3b">${numeroMaximo}</span>! Vuelvan a tirar los dados.`;
+                            // Reiniciamos los dados de todos para que tiren de nuevo
+                            setTimeout(async () => {
+                                const resetJugadores = { ...data.jugadores };
+                                for (let id in resetJugadores) { resetJugadores[id].dadoSorteo = 0; }
+                                await updateDoc(doc(db, "salas", currentSala), { jugadores: resetJugadores });
+                            }, 3000);
+                        } else {
+                            tvStatus.innerHTML = `¡Tiros completados! Empieza a jugar: <strong style="color: #4caf50; font-size:2.5rem;">${ganador}</strong>`;
+                        }
+                    } else {
+                        tvStatus.innerText = "Revisen sus celulares. ¡Tiren el dado para ver quién empieza!";
+                    }
                 }
             });
         });
@@ -178,7 +235,6 @@
             await updateDoc(doc(db, "salas", currentSala), {
                 estado: "sorteo"
             });
-            document.getElementById('tv-status').innerText = "Revisá tu celular: ¡Tirá el dado para ver quién empieza!";
         });
 
         // LÓGICA CLIENTE (CELULAR)
@@ -242,9 +298,7 @@
             const resultado = Math.floor(Math.random() * 6) + 1;
             const salaRef = doc(db, "salas", currentSala);
             await setDoc(salaRef, {
-                jugadores: {
-                    [playerId]: { dadoSorteo: resultado }
-                }
+                [`jugadores.${playerId}.dadoSorteo`]: resultado
             }, { merge: true });
         });
     </script>
