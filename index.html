@@ -417,7 +417,7 @@ $("mmClose").onclick=()=>{mmOpen=false;mmBox.classList.add("hidden");try{screen.
 const mmLogBox=document.createElement("details");mmLogBox.className="panel action-card";mmLogBox.open=true;mmLogBox.innerHTML='<summary style="font-weight:800;cursor:pointer">📜 Batallas</summary><div id="mLogList" class="tiny" style="max-height:170px;overflow:auto;margin-top:8px;line-height:1.5"></div>';$("mObjective").closest(".panel").after(mmLogBox);
 function mmLog(){const el=$("mLogList"),h=(live?.registro||[]).map(x=>"• "+escapeHtml(x)).join("<br>")||"Todavía no hay batallas.";if(el.dataset.h!==h){el.innerHTML=h;el.dataset.h=h}}
 function mmTap(name){
- const s=live;if(!s)return;const me=s.jugadores?.[playerId],p=s.paises[name];if(!me||!p)return;
+ const s=live;if(!s||mmArm)return;const me=s.jugadores?.[playerId],p=s.paises[name];if(!me||!p)return;
  const f=s.fase,my=s.turnoActual===playerId,cb=s.combate,n=me.fichasParaColocar||0,mine=p.duenio===playerId;
  if(((f==="colocacion")||(my&&f==="incorporacion"))&&n>0){if(!mine)return;const sel=$("mReinforceCountry");if(![...sel.options].some(o=>o.value===name))sel.add(new Option(name,name));sel.value=name;$("mReinforceAmount").value=1;placeArmies();return}
  if(f==="reagrupe"&&!me.listo){if(!mine)return;const pool=me.pool||0,from=me.poolFrom||"";if(pool>0&&name!==from&&(ADJ[from]||[]).includes(name)){mmMany(name,1,pool);return}mmSel=name;mmRender();return}
@@ -457,7 +457,7 @@ function mmRender(){
  badges.forEach(([x,y,t,c])=>svg.append(svgEl("text",{x,y:y-42,style:`font-size:15px;font-weight:900;fill:${c};text-anchor:middle;paint-order:stroke;stroke:#10151d;stroke-width:5px;stroke-linejoin:round;pointer-events:none`},t)));
  let h="",acts=[];
  if(s.estado==="fin")h="🏆 Ganó "+escapeHtml(playerName(s,s.ganador));
- else if(isDef){const mx=Math.min(3,s.paises[cb.to].fichas);h=`🛡️ ¡Te atacan! (${cb.dadosA} 🎲) Defendé con:`;for(let i=mx;i>=1;i--)acts.push([`🎲 ${i}`,()=>$("mDefBtns").querySelector(`[data-d="${i}"]`)?.click(),"blue"])}
+ else if(isDef){const mx=Math.min(3,s.paises[cb.to].fichas);h=`🛡️ ¡Te atacan! (${cb.dadosA} 🎲) Defendé con:`;for(let i=mx;i>=1;i--)acts.push([`🎲 ${i}`,()=>mmThrow(`Defendés con ${i} dado${i>1?"s":""}`,()=>$("mDefBtns").querySelector(`[data-d="${i}"]`)?.click()),"blue"])}
  else if(wait)h="⏳ Esperando que el defensor elija sus dados…";
  else if(conq&&my){const mx=s.paises[cb.from].fichas-1;h="🏴 ¡Conquistaste! Pasá ejércitos:";[...new Set([1,Math.ceil(mx/2),mx])].filter(k=>k>=1).forEach(k=>acts.push([k===mx&&mx>1?`Todos (${k})`:`${k}`,()=>{$("mMoveN").value=k;moveConquest()},"good"]))}
  else if(place)h=`🪖 Te quedan <b>${n}</b>. Tocá tus países para sumar 1.`;
@@ -469,9 +469,11 @@ function mmRender(){
   if(pool)acts.push(["↩ Devolver",()=>mmMany(me.poolFrom,1,pool),"secondary"]);
   acts.push(["✔ Listo",()=>$("mEndRegroupBtn").click(),"good"])}
  else if(atk){if(!mmSel)h="⚔️ Tocá un país tuyo <b>(con borde blanco)</b> desde donde atacar.";else if(!mmTo)h=`Atacás desde <b>${escapeHtml(mmSel)}</b>. Tocá un país marcado en rojo.`;
-  else{h=`<b>${escapeHtml(mmSel)}</b> ➜ <b>${escapeHtml(mmTo)}</b><br>¿Cuántos dados?`;for(let d=1;d<=Math.min(3,s.paises[mmSel].fichas-1);d++)acts.push([`🎲 ${d}`,()=>{const F=$("mFrom"),T=$("mTo"),C=$("mAttackCount");F.innerHTML=T.innerHTML=C.innerHTML="";F.add(new Option(mmSel,mmSel));T.add(new Option(mmTo,mmTo));C.add(new Option(d,d));mmTo="";attack()},"danger"])}
+  else{h=`<b>${escapeHtml(mmSel)}</b> ➜ <b>${escapeHtml(mmTo)}</b><br>¿Cuántos dados?`;for(let d=1;d<=Math.min(3,s.paises[mmSel].fichas-1);d++){const a=mmSel,b=mmTo;acts.push([`🎲 ${d}`,()=>mmThrow(`${a} ➜ ${b} con ${d} dado${d>1?"s":""}`,()=>{const F=$("mFrom"),T=$("mTo"),C=$("mAttackCount");F.innerHTML=T.innerHTML=C.innerHTML="";F.add(new Option(a,a));T.add(new Option(b,b));C.add(new Option(d,d));mmTo="";attack()}),"danger"])}}
   acts.push(["Terminar ataques",()=>$("mSkipAttackBtn").click(),"secondary"])}
  else h=escapeHtml($("mMessage").textContent);
+ if(mmArm&&!(atk||isDef)){mmArm=null;shakeStop()}
+ if(mmArm){h=`📳 <b>¡Sacudí el celu para tirar!</b><br>${escapeHtml(mmArm.label)}`;acts=[["Tirar ya",()=>{const f=mmArm?.fn;mmArm=null;shakeStop();f&&f()},"danger"],["Cancelar",()=>{mmArm=null;shakeStop();mmRender()},"secondary"]]}
  const hud=$("mmHud");hud.innerHTML=`<div>${h}</div>`;if(acts.length){const r=document.createElement("div");r.className="r";acts.forEach(([t,fn,cl])=>{if(t[0]==="§"){const d=document.createElement("div");d.style.cssText="flex:1 1 100%;font-size:.8rem;color:#ffd166";d.textContent=t.slice(1);r.append(d);return}const b=document.createElement("button");b.className=cl;b.textContent=t;b.onclick=fn;r.append(b)});hud.append(r)}
  let bt="";if(cb?.ataque&&cb.defensa&&cb.estado!=="defensa"){const A=cb.ataque,D=cb.defensa,k=Math.min(A.length,D.length);bt=`<div class="mmb"><b>🎲 Última batalla</b><div>⚔️ ${A.map((v,i)=>mmDie(v,i<k&&v>D[i])).join("")}</div><div>🛡️ ${D.map((v,i)=>mmDie(v,i<k&&!(A[i]>v))).join("")}</div><div style="margin-top:4px">Atacante −${cb.la} · Defensor −${cb.ld}</div></div>`}
  $("mmBat").innerHTML=bt}
@@ -487,6 +489,17 @@ document.addEventListener("pointerdown",pAcInit,{once:true});
 function phoneAlert(p){try{const fl=document.createElement("div");fl.style.cssText="position:fixed;inset:0;z-index:99;pointer-events:none;box-shadow:inset 0 0 0 16px #ff4d4d;animation:pfl .9s ease-out forwards";document.body.append(fl);setTimeout(()=>fl.remove(),1000);
  pAcInit();if(!pAC)return;const n=Array.isArray(p)?Math.ceil(p.length/2):1;for(let i=0;i<n;i++){const o=pAC.createOscillator(),g=pAC.createGain(),t=pAC.currentTime+i*.22;o.frequency.value=i%2?880:660;o.connect(g);g.connect(pAC.destination);g.gain.setValueAtTime(.0001,t);g.gain.exponentialRampToValueAtTime(.3,t+.02);g.gain.exponentialRampToValueAtTime(.0001,t+.18);o.start(t);o.stop(t+.2)}}catch(e){}}
 {const sel=$("limiteSel");if(sel){sel.innerHTML='<option value="0" selected>Sin límite</option>';const lb=sel.closest("label");if(lb)lb.classList.add("hidden")}}
+
+/* ===== Sacudir el celular para tirar los dados ===== */
+let mmArm=null,shakeH=null,shOn=true;try{shOn=localStorage.getItem("teg_shake")!=="0"}catch(e){}
+function shakeStop(){if(shakeH){window.removeEventListener("devicemotion",shakeH);shakeH=null}}
+function shakeStart(done){shakeStop();let last=0,lt=0,hits=0;shakeH=e=>{const a=e.accelerationIncludingGravity||e.acceleration;if(!a)return;const d=Math.abs(Math.hypot(a.x||0,a.y||0,a.z||0)-9.8),now=Date.now();if(d>14&&now-last>120){last=now;if(now-lt>900)hits=0;lt=now;if(++hits>=3){shakeStop();done()}}};window.addEventListener("devicemotion",shakeH)}
+async function mmThrow(label,fn){
+ if(!shOn||typeof DeviceMotionEvent==="undefined"){fn();return}
+ let ok=true;try{if(typeof DeviceMotionEvent.requestPermission==="function")ok=(await DeviceMotionEvent.requestPermission())==="granted"}catch(e){ok=false}
+ if(!ok){fn();return}
+ mmArm={label,fn};mmRender();shakeStart(()=>{const f=mmArm?.fn;mmArm=null;try{navigator.vibrate&&navigator.vibrate(80)}catch(e){}f&&f()})}
+{const b=document.createElement("button");b.className="secondary";const t=()=>b.textContent=shOn?"📳 Sacudir para tirar: SÍ":"📳 Sacudir para tirar: NO";t();b.onclick=()=>{shOn=!shOn;try{localStorage.setItem("teg_shake",shOn?"1":"0")}catch(e){}t()};$("mmSide").append(b)}
 </script>
 <div id="diceOverlay" class="hidden"></div>
 </body>
