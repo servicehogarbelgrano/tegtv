@@ -219,7 +219,7 @@ async function joinRoom(code,name,errId){
  }catch(e){if(/No existe/.test(e.message||""))try{localStorage.removeItem("teg_sesion")}catch(_){}err(errId,e.message||"No se pudo conectar.")}
 }
 function pickObjective(i){return "Objetivo común: ocupar 30 países (2 jugadores), 27 (3) o 25 (4). Los objetivos secretos de las tarjetas todavía no están cargados."}
-function listenRoom(){if(unsubscribe)unsubscribe();unsubscribe=onSnapshot(roomRef(),snap=>{if(!snap.exists())return;const s=snap.data();live=s;if(s.estado==="lobby"){if(isHost){show("lobby");renderLobby(s)}else{show("mobile");$("mobileLogin").classList.add("hidden");$("mobileGame").classList.remove("hidden");renderMobile(s)}}else{if(isHost)show("tvGame");else show("mobile");if(isHost)renderGame(s);else renderMobile(s)}},e=>{if(isHost)err("homeError","Error de Firebase: "+e.message);else err("mError","Error de Firebase: "+e.message)})}
+function listenRoom(){if(unsubscribe)unsubscribe();unsubscribe=onSnapshot(roomRef(),snap=>{if(!snap.exists())return;const s=snap.data();live=s;if(s.estado==="lobby"){if(isHost){show("lobby");renderLobby(s)}else{show("mobile");$("mobileLogin").classList.add("hidden");$("mobileGame").classList.remove("hidden");renderMobile(s)}}else{if(isHost)show("tvGame");else show("mobile");if(isHost)renderGame(s);else if(!phoneHold(s))renderMobile(s)}},e=>{if(isHost)err("homeError","Error de Firebase: "+e.message);else err("mError","Error de Firebase: "+e.message)})}
 const OBJETIVOS=[
 {t:"Ocupar América del Norte y Europa",c:["América del Norte","Europa"]},
 {t:"Ocupar América del Sur, África y Oceanía",c:["América del Sur","África","Oceanía"]},
@@ -323,7 +323,7 @@ async function moveArmy(country,delta){try{await runTx(db,async tx=>{const ref=r
  else if(pool>0){if(country!==from&&!(ADJ[from]||[]).includes(country))throw Error("Solo podés pasarlos a un país tuyo vecino de "+from+".");
   tx.update(ref,{[`paises.${country}.fichas`]:p.fichas+1,[`jugadores.${playerId}.pool`]:pool-1,[`jugadores.${playerId}.poolFrom`]:pool-1>0?from:""})}
  else if(nuevos>0)tx.update(ref,{[`paises.${country}.fichas`]:p.fichas+1,[`jugadores.${playerId}.fichasParaColocar`]:nuevos-1});
- else throw Error("No tenés ejércitos para poner: sacá uno con − de un país y pasalo a un vecino.")})}catch(e){alert(e.message)}}
+ else throw Error("No tenés ejércitos para poner: sacá uno con − de un país y pasalo a un vecino.")});return true}catch(e){alert(e.message);return false}}
 async function useCard(country){try{await runTx(db,async tx=>{const ref=roomRef(),snap=await tx.get(ref),s=snap.data(),me=s.jugadores[playerId],p=s.paises[country];
  if(s.fase!=="reagrupe"||me.listo)throw Error("Las cartas se usan durante el reagrupe.");
  if(!(me.cartas||[]).includes(country))throw Error("No tenés esa carta.");
@@ -354,11 +354,13 @@ let lastDice="";const face=v=>String.fromCharCode(0x267F+v);
 function diceAnim(s){if(!isHost)return;const c=s.combate;if(!c||!c.ataque||!c.defensa||(c.estado!=="fin"&&c.estado!=="conquista")||c.id===lastDice)return;lastDice=c.id;
  const A=[...c.ataque].sort((x,y)=>y-x),D=[...c.defensa].sort((x,y)=>y-x),J=s.jugadores||{},ov=$("diceOverlay"),mk=(arr,k)=>arr.map(v=>`<span class="die ${k}" data-v="${v}">${face(v)}</span>`).join("");
  ov.innerHTML=`<div class="dice-box"><div class="dice-title">${escapeHtml(J[c.atacanteId]?.nombre||"")} ⚔ ${escapeHtml(J[c.defensorId]?.nombre||"")} · ${escapeHtml(c.from)} → ${escapeHtml(c.to)}</div><div class="dice-row"><div class="dice-side" style="--c:${J[c.atacanteId]?.color||"#e74c3c"}">${mk(A,"a")}</div><b>VS</b><div class="dice-side" style="--c:${J[c.defensorId]?.color||"#3498db"}">${mk(D,"d")}</div></div><div class="dice-res"></div></div>`;
- ov.classList.remove("hidden");sfx.dice();const dies=[...ov.querySelectorAll(".die")];let t=0;
+ ov.classList.remove("hidden");posDice(ov);sfx.dice();const dies=[...ov.querySelectorAll(".die")];let t=0;
  const iv=setInterval(()=>{if(++t<14){dies.forEach(d=>d.textContent=face(1+Math.floor(Math.random()*6)));return}clearInterval(iv);
   dies.forEach(d=>{d.textContent=face(+d.dataset.v);d.classList.add("done")});
   const da=ov.querySelectorAll(".die.a"),dd=ov.querySelectorAll(".die.d");for(let i=0;i<Math.min(A.length,D.length);i++){const w=A[i]>D[i];da[i].classList.add(w?"win":"lose");dd[i].classList.add(w?"lose":"win")}
-  ov.querySelector(".dice-res").textContent=`−${c.la||0} atacante · −${c.ld||0} defensor`+(c.estado==="conquista"?" · ¡Conquistado!":"");
+  {const R=ov.querySelector(".dice-res"),la=c.la||0,ld=c.ld||0,an=J[c.atacanteId]?.nombre||"",dn=J[c.defensorId]?.nombre||"";
+  const w=c.estado==="conquista"?[`🏴 ¡${an} conquistó ${c.to}!`,J[c.atacanteId]?.color]:ld>la?[`⚔️ Gana ${an} en ${c.to}`,J[c.atacanteId]?.color]:la>ld?[`🛡️ Resiste ${dn} en ${c.to}`,J[c.defensorId]?.color]:[`Empate en ${c.to}`,"#ddd"];
+  R.innerHTML=`<div style="font-size:1.9rem;font-weight:950;color:${w[1]||"#fff"};text-shadow:0 2px 6px #000">${escapeHtml(w[0])}</div><div style="font-size:.9rem;font-weight:700">−${la} atacante · −${ld} defensor</div>`}
   setTimeout(()=>ov.classList.add("hidden"),5500)},90)}
 /* ===== Reloj de turno (solo TV) ===== */
 let tmKey="",tmEnd=0,tmBusy=false,tmBeep=-1;
@@ -377,7 +379,7 @@ function timerTick(){const el=$("tvTimer"),s=live;if(!isHost||!s||s.estado!=="ju
  const cb=s.combate;if(left===0&&!tmBusy&&!(cb&&(cb.estado==="defensa"||cb.estado==="conquista"))){tmBusy=true;if(s.fase==="ataque")endTurn(s.turnoActual);else forceReady()}}
 setInterval(timerTick,250);
 /* ===== Vibración (celular) ===== */
-let hapD="",hapT="",hapR="";const buzz=p=>{try{navigator.vibrate&&navigator.vibrate(p)}catch(e){}};
+let hapD="",hapT="",hapR="";const buzz=p=>{try{navigator.vibrate&&navigator.vibrate(p)}catch(e){}phoneAlert(p)};
 function haptics(s,me,isDef,my){const f=s.fase,kd=isDef?s.combate.id:"",kt=(my&&f==="ataque")?s.ronda+":"+s.turnoActual:"",kr=(f==="reagrupe"&&!me.listo)?String(s.ronda):"";
  if(kd&&kd!==hapD)buzz([400,120,400,120,400]);if(kt&&kt!==hapT)buzz([250,100,250]);if(kr&&kr!==hapR)buzz(200);hapD=kd||hapD;hapT=kt||hapT;hapR=kr||hapR}
 $("mFromCards").addEventListener("click",e=>{const b=e.target.closest("[data-cf]");if(!b||!live)return;selectedFrom=b.dataset.cf;selectedTo="";populateAttackSelects();renderMap(live);chips(live,0)});
@@ -406,7 +408,7 @@ const params=new URLSearchParams(location.search);if(params.get("sala")){$("home
  try{const sv=JSON.parse(localStorage.getItem("teg_sesion")||"null");if(sv&&sv.sala&&sv.nombre&&(!params.get("sala")||params.get("sala").toUpperCase()===sv.sala)){$("home").classList.add("hidden");$("mobile").classList.remove("hidden");$("mobileLogin").classList.remove("hidden");$("mCode").value=sv.sala;$("mName").value=sv.nombre;joinRoom(sv.sala,sv.nombre,"mError")}}catch(e){}
 /* ===== Mapa táctil en el celular ===== */
 let mmOpen=false,mmSel="",mmTo="";
-{const st=document.createElement("style");st.textContent=`#mm{position:fixed;inset:0;z-index:50;background:#0e1620;display:flex}#mmSvg{flex:1;min-width:0;height:100%;touch-action:manipulation}#mmSide{width:215px;flex:none;display:flex;flex-direction:column;gap:8px;padding:8px;padding-right:max(8px,env(safe-area-inset-right));overflow-y:auto;background:#0d1520;border-left:1px solid #314256;color:#fff}#mmHud{font-weight:700;font-size:.9rem;line-height:1.35}#mmHud .r{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}#mmHud .r button{flex:1 1 40%;padding:11px 8px;font-size:1rem}#mmSide>button{padding:8px}.mmb{background:#182231;border-radius:10px;padding:8px;font-size:.85rem}.mmn{animation:mmp .8s infinite alternate}.mml{animation:mmd 1s linear infinite}@keyframes mmp{to{stroke-width:2.5;opacity:.65}}@keyframes mmd{to{stroke-dashoffset:-32}}@media (orientation:portrait){#mm{flex-direction:column}#mmSvg{height:auto;flex:1}#mmSide{width:auto;max-height:42%;border-left:0;border-top:1px solid #314256}}`;document.head.append(st)}
+{const st=document.createElement("style");st.textContent=`#mm{position:fixed;inset:0;z-index:50;background:#0e1620;display:flex}#mmSvg{flex:1;min-width:0;height:100%;touch-action:manipulation}#mmSide{width:215px;flex:none;display:flex;flex-direction:column;gap:8px;padding:8px;padding-right:max(8px,env(safe-area-inset-right));overflow-y:auto;background:#0d1520;border-left:1px solid #314256;color:#fff}#mmHud{font-weight:700;font-size:.9rem;line-height:1.35}#mmHud .r{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}#mmHud .r button{flex:1 1 28%;padding:11px 8px;font-size:1rem}#mmSide>button{padding:8px}.mmb{background:#182231;border-radius:10px;padding:8px;font-size:.85rem}.mmn{animation:mmp .8s infinite alternate}.mml{animation:mmd 1s linear infinite}@keyframes mmp{to{stroke-width:2.5;opacity:.65}}@keyframes mmd{to{stroke-dashoffset:-32}}@media (orientation:portrait){#mm{flex-direction:column}#mmSvg{height:auto;flex:1}#mmSide{width:auto;max-height:42%;border-left:0;border-top:1px solid #314256}}`;document.head.append(st)}
 const mmBox=document.createElement("div");mmBox.id="mm";mmBox.className="hidden";
 mmBox.innerHTML='<svg id="mmSvg" viewBox="0 0 1024 724" preserveAspectRatio="xMidYMid meet"></svg><div id="mmSide"><button id="mmClose" class="secondary">✕ Cerrar mapa</button><div id="mmHud"></div><div id="mmBat"></div></div>';document.body.append(mmBox);
 const mmBtn=document.createElement("button");mmBtn.className="blue";mmBtn.textContent="🗺️ Abrir mapa táctil (celu de costado)";mmBtn.style.cssText="margin:12px;width:calc(100% - 24px)";$("mobileGame").prepend(mmBtn);
@@ -418,11 +420,12 @@ function mmTap(name){
  const s=live;if(!s)return;const me=s.jugadores?.[playerId],p=s.paises[name];if(!me||!p)return;
  const f=s.fase,my=s.turnoActual===playerId,cb=s.combate,n=me.fichasParaColocar||0,mine=p.duenio===playerId;
  if(((f==="colocacion")||(my&&f==="incorporacion"))&&n>0){if(!mine)return;const sel=$("mReinforceCountry");if(![...sel.options].some(o=>o.value===name))sel.add(new Option(name,name));sel.value=name;$("mReinforceAmount").value=1;placeArmies();return}
- if(f==="reagrupe"&&!me.listo){if(mine){mmSel=name;mmRender()}return}
+ if(f==="reagrupe"&&!me.listo){if(!mine)return;const pool=me.pool||0,from=me.poolFrom||"";if(pool>0&&name!==from&&(ADJ[from]||[]).includes(name)){mmMany(name,1,pool);return}mmSel=name;mmRender();return}
  if(my&&f==="ataque"&&cb?.estado!=="defensa"&&cb?.estado!=="conquista"){
   if(mine){if(p.fichas>1){mmSel=name;mmTo=""}}else if(mmSel&&ADJ[mmSel]?.includes(name))mmTo=name;
   mmRender()}
 }
+async function mmMany(c,d,k){for(let i=0;i<k;i++){if(!await moveArmy(c,d))break}}
 function mmDie(v,w){return `<span style="display:inline-grid;place-items:center;width:28px;height:28px;border-radius:7px;margin:2px;font-weight:900;color:#15202b;background:${w?"#f4f7fb":"#6b7785"};${w?"":"opacity:.55;text-decoration:line-through"}">${v}</span>`}
 function mmRender(){
  if(!mmOpen||!live)return;const s=live,me=s.jugadores?.[playerId];if(!me)return;
@@ -431,7 +434,7 @@ function mmRender(){
  if(!(s.paises[mmSel]?.duenio===playerId&&((atk&&s.paises[mmSel].fichas>1)||rg)))mmSel="";if(!atk)mmTo="";
  const mine=Object.keys(s.paises).filter(k=>s.paises[k].duenio===playerId),can=atk&&!mmSel?mine.filter(k=>s.paises[k].fichas>1):[],
   nb=atk&&mmSel?(ADJ[mmSel]||[]).filter(x=>s.paises[x]&&s.paises[x].duenio!==playerId):[],
-  rgNb=rg&&me.pool&&me.poolFrom?(ADJ[me.poolFrom]||[]).filter(x=>s.paises[x]?.duenio===playerId):[],
+  rgNb=rg?(me.pool&&me.poolFrom?(ADJ[me.poolFrom]||[]):mmSel?(ADJ[mmSel]||[]):[]).filter(x=>s.paises[x]?.duenio===playerId):[],
   fight=cb&&(wait||conq)?[cb.from,cb.to]:[],tg=mmTo?[mmTo]:nb;
  const svg=$("mmSvg");svg.innerHTML="";svg.append(svgEl("image",{href:MAPIMG,x:0,y:0,width:1024,height:724}));
  const done=new Set();Object.entries(ADJ).forEach(([a,ns])=>ns.forEach(b=>{const k=[a,b].sort().join("|");if(done.has(k)||!POS[a]||!POS[b])return;done.add(k);svg.append(svgEl("line",{x1:POS[a][0],y1:POS[a][1],x2:POS[b][0],y2:POS[b][1],class:"map-link"}))}));
@@ -441,7 +444,7 @@ function mmRender(){
  ALL.forEach(name=>{const p=s.paises?.[name];if(!p)return;const [x,y]=POS[name],isMine=p.duenio===playerId,g=svgEl("g",{});
   const isSel=name===mmSel,isTg=tg.includes(name)&&atk&&mmSel,isCan=can.includes(name),isFight=fight.includes(name),isRg=rgNb.includes(name);
   const focus=isSel||isTg||isCan||isFight||isRg||(rg&&name===mmSel);
-  const dim=(atk&&mmSel&&!isSel&&!isTg)||(atk&&!mmSel&&!isCan)||(fight.length&&!isFight)||(rg&&rgNb.length&&!isRg&&name!==me.poolFrom);
+  const dim=(atk&&mmSel&&!isSel&&!isTg)||(atk&&!mmSel&&!isCan)||(fight.length&&!isFight)||(rg&&rgNb.length&&!isRg&&name!==me.poolFrom&&name!==mmSel);
   g.style.opacity=dim?.25:1;
   const hl=isSel||isFight||(rg&&name===mmSel);
   g.append(svgEl("circle",{cx:x,cy:y,r:hl||isTg?31:isCan||isRg?27:23,fill:s.jugadores?.[p.duenio]?.color||"#536273",class:"territory"+(isTg||isCan||isRg?" mmn":""),stroke:isTg?"#ff4d4d":hl?"#ffd166":isCan||isRg?"#fff":(isMine&&(place||rg)?"#fff":"#e6edf5"),"stroke-width":isTg?8:hl?7:isCan||isRg?5:2.5}));
@@ -458,16 +461,32 @@ function mmRender(){
  else if(wait)h="⏳ Esperando que el defensor elija sus dados…";
  else if(conq&&my){const mx=s.paises[cb.from].fichas-1;h="🏴 ¡Conquistaste! Pasá ejércitos:";[...new Set([1,Math.ceil(mx/2),mx])].filter(k=>k>=1).forEach(k=>acts.push([k===mx&&mx>1?`Todos (${k})`:`${k}`,()=>{$("mMoveN").value=k;moveConquest()},"good"]))}
  else if(place)h=`🪖 Te quedan <b>${n}</b>. Tocá tus países para sumar 1.`;
- else if(rg){h=`🔄 Reagrupe<br>Nuevos: ${me.fichasParaColocar||0} · Sueltos: ${me.pool||0}${me.pool?" (de "+escapeHtml(me.poolFrom)+")":""}<br>`+(mmSel?`<b>${escapeHtml(mmSel)}</b>: ${s.paises[mmSel].fichas}`:"Tocá uno de tus países");
-  if(mmSel)acts.push(["−",()=>moveArmy(mmSel,-1),"secondary"],["+",()=>moveArmy(mmSel,1),"blue"]);acts.push(["✔ Listo",()=>$("mEndRegroupBtn").click(),"good"])}
+ else if(rg){const pool=me.pool||0,nu=me.fichasParaColocar||0,sf=mmSel?s.paises[mmSel].fichas:0;
+  h=`🔄 Reagrupe · Nuevos: ${nu}${pool?` · Sueltos: ${pool} (de ${escapeHtml(me.poolFrom)})`:""}<br>`+(pool?"Tocá un país vecino resaltado para dejarlos.":mmSel?`<b>${escapeHtml(mmSel)}</b>: ${sf} ejércitos`:"Tocá uno de tus países");
+  const nums=(max,fn)=>{const L=[];for(let i=1;i<=Math.min(max,5);i++)L.push([String(i),()=>fn(i),"blue"]);if(max>5)L.push([`Todos (${max})`,()=>fn(max),"blue"]);return L};
+  if(mmSel&&!pool&&nu>0)acts.push(["§➕ Sumar nuevos aquí:"],...nums(nu,k=>mmMany(mmSel,1,k)));
+  if(mmSel&&sf>1&&(!pool||me.poolFrom===mmSel))acts.push(["§➡️ Sacar para mover:"],...nums(sf-1,k=>mmMany(mmSel,-1,k)));
+  if(pool)acts.push(["↩ Devolver",()=>mmMany(me.poolFrom,1,pool),"secondary"]);
+  acts.push(["✔ Listo",()=>$("mEndRegroupBtn").click(),"good"])}
  else if(atk){if(!mmSel)h="⚔️ Tocá un país tuyo <b>(con borde blanco)</b> desde donde atacar.";else if(!mmTo)h=`Atacás desde <b>${escapeHtml(mmSel)}</b>. Tocá un país marcado en rojo.`;
   else{h=`<b>${escapeHtml(mmSel)}</b> ➜ <b>${escapeHtml(mmTo)}</b><br>¿Cuántos dados?`;for(let d=1;d<=Math.min(3,s.paises[mmSel].fichas-1);d++)acts.push([`🎲 ${d}`,()=>{const F=$("mFrom"),T=$("mTo"),C=$("mAttackCount");F.innerHTML=T.innerHTML=C.innerHTML="";F.add(new Option(mmSel,mmSel));T.add(new Option(mmTo,mmTo));C.add(new Option(d,d));mmTo="";attack()},"danger"])}
   acts.push(["Terminar ataques",()=>$("mSkipAttackBtn").click(),"secondary"])}
  else h=escapeHtml($("mMessage").textContent);
- const hud=$("mmHud");hud.innerHTML=`<div>${h}</div>`;if(acts.length){const r=document.createElement("div");r.className="r";acts.forEach(([t,fn,cl])=>{const b=document.createElement("button");b.className=cl;b.textContent=t;b.onclick=fn;r.append(b)});hud.append(r)}
+ const hud=$("mmHud");hud.innerHTML=`<div>${h}</div>`;if(acts.length){const r=document.createElement("div");r.className="r";acts.forEach(([t,fn,cl])=>{if(t[0]==="§"){const d=document.createElement("div");d.style.cssText="flex:1 1 100%;font-size:.8rem;color:#ffd166";d.textContent=t.slice(1);r.append(d);return}const b=document.createElement("button");b.className=cl;b.textContent=t;b.onclick=fn;r.append(b)});hud.append(r)}
  let bt="";if(cb?.ataque&&cb.defensa&&cb.estado!=="defensa"){const A=cb.ataque,D=cb.defensa,k=Math.min(A.length,D.length);bt=`<div class="mmb"><b>🎲 Última batalla</b><div>⚔️ ${A.map((v,i)=>mmDie(v,i<k&&v>D[i])).join("")}</div><div>🛡️ ${D.map((v,i)=>mmDie(v,i<k&&!(A[i]>v))).join("")}</div><div style="margin-top:4px">Atacante −${cb.la} · Defensor −${cb.ld}</div></div>`}
  $("mmBat").innerHTML=bt}
 
+
+/* ===== Ajustes: dados TV, aviso celu, sin reloj ===== */
+{const st=document.createElement("style");st.textContent=`.dice-box{padding:8px 16px!important}.dice-title{font-size:.8rem!important;margin-bottom:2px!important}.dice-row{gap:12px!important}.dice-box .die{font-size:2.3rem!important;line-height:1!important}@keyframes pfl{from{opacity:1}to{opacity:0}}`;document.head.append(st)}
+function posDice(ov){try{const r=$("worldMap").getBoundingClientRect(),sc=Math.min(r.width/1024,r.height/724),x=r.left+(r.width-1024*sc)/2+490*sc,y=r.top+(r.height-724*sc)/2+640*sc;ov.style.cssText=`left:${x}px;top:${y}px;bottom:auto;transform:translate(-50%,-50%)`}catch(e){}}
+let mHoldId="",mHoldT=0;
+function phoneHold(s){const c=s.combate;if(!c||!c.ataque||(c.estado!=="fin"&&c.estado!=="conquista"))return false;if(c.id!==mHoldId){mHoldId=c.id;mHoldT=Date.now()+1700;setTimeout(()=>{if(live)renderMobile(live)},1750)}return Date.now()<mHoldT}
+let pAC=null;const pAcInit=()=>{try{pAC=pAC||new(window.AudioContext||window.webkitAudioContext)();pAC.resume&&pAC.resume()}catch(e){}};
+document.addEventListener("pointerdown",pAcInit,{once:true});
+function phoneAlert(p){try{const fl=document.createElement("div");fl.style.cssText="position:fixed;inset:0;z-index:99;pointer-events:none;box-shadow:inset 0 0 0 16px #ff4d4d;animation:pfl .9s ease-out forwards";document.body.append(fl);setTimeout(()=>fl.remove(),1000);
+ pAcInit();if(!pAC)return;const n=Array.isArray(p)?Math.ceil(p.length/2):1;for(let i=0;i<n;i++){const o=pAC.createOscillator(),g=pAC.createGain(),t=pAC.currentTime+i*.22;o.frequency.value=i%2?880:660;o.connect(g);g.connect(pAC.destination);g.gain.setValueAtTime(.0001,t);g.gain.exponentialRampToValueAtTime(.3,t+.02);g.gain.exponentialRampToValueAtTime(.0001,t+.18);o.start(t);o.stop(t+.2)}}catch(e){}}
+{const sel=$("limiteSel");if(sel){sel.innerHTML='<option value="0" selected>Sin límite</option>';const lb=sel.closest("label");if(lb)lb.classList.add("hidden")}}
 </script>
 <div id="diceOverlay" class="hidden"></div>
 </body>
