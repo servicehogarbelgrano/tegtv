@@ -93,6 +93,8 @@ const firebaseConfig = {
   messagingSenderId: "735650643113",
   appId: "1:735650643113:web:e0ad00556934ce48773db8"
 };
+let txq=Promise.resolve();
+function runTx(d,fn){const go=async n=>{try{return await runTransaction(d,fn)}catch(e){if(n<5&&/base version|aborted|failed-precondition|contention/i.test((e.code||"")+" "+e.message)){await new Promise(r=>setTimeout(r,150*(n+1)));return go(n+1)}throw e}};const p=txq.then(()=>go(0));txq=p.catch(()=>{});return p}
 const app=initializeApp(firebaseConfig), db=getFirestore(app), auth=getAuth(app);
 const $=id=>document.getElementById(id);
 const COLORS=["#e74c3c","#3498db","#2ecc71","#f1c40f","#9b59b6","#e67e22"];
@@ -211,7 +213,7 @@ async function createRoom(){
 }
 async function joinRoom(code,name,errId){
  try{clearErr(errId);if(!code||!name.trim())throw Error("Ingresá el código y tu nombre.");await signInAnonymously(auth);playerId=auth.currentUser.uid;sala=code.toUpperCase();isHost=false;
- const ref=roomRef();await runTransaction(db,async tx=>{const snap=await tx.get(ref);if(!snap.exists())throw Error("No existe esa sala.");const s=snap.data();const players=s.jugadores||{};if(players[playerId])return;if(s.estado!=="lobby")throw Error("La partida ya comenzó.");if(Object.keys(players).length>=4)throw Error("La sala está completa (máximo 4 jugadores).");const color=COLORS.find(c=>!Object.values(players).some(p=>p.color===c))||COLORS[0];const objective=pickObjective(Object.keys(players).length);tx.update(ref,{[`jugadores.${playerId}`]:{nombre:name.trim().slice(0,24),color,dadoSorteo:0,fichasParaColocar:0,objetivo:"",objetivoCont:[]}})});
+ const ref=roomRef();await runTx(db,async tx=>{const snap=await tx.get(ref);if(!snap.exists())throw Error("No existe esa sala.");const s=snap.data();const players=s.jugadores||{};if(players[playerId])return;if(s.estado!=="lobby")throw Error("La partida ya comenzó.");if(Object.keys(players).length>=4)throw Error("La sala está completa (máximo 4 jugadores).");const color=COLORS.find(c=>!Object.values(players).some(p=>p.color===c))||COLORS[0];const objective=pickObjective(Object.keys(players).length);tx.update(ref,{[`jugadores.${playerId}`]:{nombre:name.trim().slice(0,24),color,dadoSorteo:0,fichasParaColocar:0,objetivo:"",objetivoCont:[]}})});
  try{localStorage.setItem("teg_sesion",JSON.stringify({sala,nombre:name.trim()}))}catch(e){}
  show("mobile");$("mobileLogin").classList.add("hidden");$("mobileGame").classList.remove("hidden");listenRoom();
  }catch(e){if(/No existe/.test(e.message||""))try{localStorage.removeItem("teg_sesion")}catch(_){}err(errId,e.message||"No se pudo conectar.")}
@@ -247,7 +249,7 @@ function renderMobile(s){renderMobileBase(s);showWin(s);const me=s.jugadores?.[p
  else if(isDef){st="¡Te atacan!";msg="Elegí con cuántos dados defender."}
  else if(f==="reagrupe"){st="Reagrupe";const cn=me.cartaNueva;msg=me.listo?"✔ Listo. Esperando a los demás.":"Sumá tus ejércitos nuevos con + y mové entre países vecinos con − y +."+(cn?` Sacaste la carta ${cn}`+(s.paises[cn]?.duenio===playerId?": es tu país, tocá la carta para sumar 2.":": la guardás hasta conquistar ese país."):"")}
   else if(my&&f==="ataque")msg=conq?"¡Conquistaste! Elegí cuántos ejércitos pasar.":wait?`Esperando que ${playerName(s,cb.defensorId)} elija sus dados…`:"Atacá o terminá tu turno.";
- if(st)$("mStatus").textContent=st;if(msg)$("mMessage").textContent=msg;chips(s,me);cards(s,me);atkDice(!!(wait||conq));haptics(s,me,isDef,my);mmRender()}
+ if(st)$("mStatus").textContent=st;if(msg)$("mMessage").textContent=msg;chips(s,me);cards(s,me);atkDice(!!(wait||conq));haptics(s,me,isDef,my);mmRender();mmLog()}
 function chips(s,me){const mine=owned(s,playerId),rv=!$("reinforceCard").classList.contains("hidden"),av=!$("attackCard").classList.contains("hidden"),cur=rv?$("mReinforceCountry").value:av?$("mFrom").value:"";
  const rg=s.fase==="reagrupe"&&!s.jugadores?.[playerId]?.listo,jp=s.jugadores?.[playerId]||{};$("rgBar").classList.toggle("hidden",!rg);$("rgPool").textContent="Nuevos: "+(jp.fichasParaColocar||0)+" · Sueltos: "+(jp.pool||0)+(jp.pool?" (de "+jp.poolFrom+")":"");
  $("mCountries").innerHTML=mine.map(n=>rg?`<span class="pill rg"><button data-m="${escapeHtml(n)}">−</button>${escapeHtml(n)} · ${s.paises[n].fichas}<button data-p="${escapeHtml(n)}">+</button></span>`:`<button class="pill tcell${n===cur?" sel":""}" data-n="${escapeHtml(n)}">${escapeHtml(n)} · ${s.paises[n].fichas}</button>`).join("");
@@ -268,13 +270,13 @@ function sorteoTV(s){
  sorteoBusy=true;
  const max=Math.max(...ids.map(id=>J[id].dadoSorteo)),tops=ids.filter(id=>J[id].dadoSorteo===max);
  if(tops.length>1){$("tvStatus").textContent="¡Empate! Vuelven a tirar los empatados";
-  setTimeout(async()=>{try{await runTransaction(db,async tx=>{const ref=roomRef(),snap=await tx.get(ref),d=snap.data();if(d.fase!=="sorteo")return;const u={};tops.forEach(id=>u[`jugadores.${id}.dadoSorteo`]=0);tx.update(ref,u)})}catch(e){}sorteoBusy=false},3000);return}
+  setTimeout(async()=>{try{await runTx(db,async tx=>{const ref=roomRef(),snap=await tx.get(ref),d=snap.data();if(d.fase!=="sorteo")return;const u={};tops.forEach(id=>u[`jugadores.${id}.dadoSorteo`]=0);tx.update(ref,u)})}catch(e){}sorteoBusy=false},3000);return}
  const w=tops[0];$("tvStatus").textContent="Empieza "+J[w].nombre;
- setTimeout(async()=>{try{await runTransaction(db,async tx=>{const ref=roomRef(),snap=await tx.get(ref),d=snap.data();if(d.fase!=="sorteo")return;
+ setTimeout(async()=>{try{await runTx(db,async tx=>{const ref=roomRef(),snap=await tx.get(ref),d=snap.data();if(d.fase!=="sorteo")return;
   const order=d.turnOrder||Object.keys(d.jugadores),k=order.indexOf(w);tx.update(ref,{fase:"ataque",turnoActual:w,ronda:1,turnOrder:[...order.slice(k),...order.slice(0,k)],registro:addLog(d.registro,`${d.jugadores[w].nombre} empieza atacando.`)})})}catch(e){alert(e.message)}sorteoBusy=false},3000)}
-async function startGame(){const ref=roomRef();try{await runTransaction(db,async tx=>{const snap=await tx.get(ref);if(!snap.exists())throw Error("No existe la sala");const s=snap.data(),players={...s.jugadores},ids=Object.keys(players);if(ids.length<2)throw Error("Se necesitan al menos 2 jugadores");const countries={};shuffle([...ALL]).forEach((n,i)=>countries[n]={duenio:ids[i%ids.length],fichas:1});const obj=shuffle([...OBJETIVOS]),goal=GOAL[ids.length]||12;ids.forEach((id,i)=>{players[id]={...players[id],dadoSorteo:0,fichasParaColocar:6,objetivo:`${obj[i].t} · Objetivo común: ${goal} países`,objetivoCont:obj[i].c}});tx.update(ref,{limite:Number($("limiteSel")?.value)||0,mazo:shuffle([...ALL]),estado:"jugando",fase:"colocacion",paises:countries,jugadores:players,turnoActual:"",ronda:1,combate:null,registro:addLog(s.registro,"Comenzó la partida: cada jugador coloca sus 6 ejércitos."),turnOrder:ids})});show("tvGame")}catch(e){alert(e.message)}}
+async function startGame(){const ref=roomRef();try{await runTx(db,async tx=>{const snap=await tx.get(ref);if(!snap.exists())throw Error("No existe la sala");const s=snap.data(),players={...s.jugadores},ids=Object.keys(players);if(ids.length<2)throw Error("Se necesitan al menos 2 jugadores");const countries={};shuffle([...ALL]).forEach((n,i)=>countries[n]={duenio:ids[i%ids.length],fichas:1});const obj=shuffle([...OBJETIVOS]),goal=GOAL[ids.length]||12;ids.forEach((id,i)=>{players[id]={...players[id],dadoSorteo:0,fichasParaColocar:6,objetivo:`${obj[i].t} · Objetivo común: ${goal} países`,objetivoCont:obj[i].c}});tx.update(ref,{limite:Number($("limiteSel")?.value)||0,mazo:shuffle([...ALL]),estado:"jugando",fase:"colocacion",paises:countries,jugadores:players,turnoActual:"",ronda:1,combate:null,registro:addLog(s.registro,"Comenzó la partida: cada jugador coloca sus 6 ejércitos."),turnOrder:ids})});show("tvGame")}catch(e){alert(e.message)}}
 async function placeArmies(){const country=$("mReinforceCountry").value,n=Number($("mReinforceAmount").value);if(!country||!Number.isInteger(n)||n<1)return alert("Elegí país y cantidad válida.");
- try{await runTransaction(db,async tx=>{const ref=roomRef(),snap=await tx.get(ref),s=snap.data(),me=s.jugadores[playerId],p=s.paises[country],col=s.fase==="colocacion";
+ try{await runTx(db,async tx=>{const ref=roomRef(),snap=await tx.get(ref),s=snap.data(),me=s.jugadores[playerId],p=s.paises[country],col=s.fase==="colocacion";
  if(!(col||(s.fase==="incorporacion"&&s.turnoActual===playerId)))throw Error("Ahora no podés colocar ejércitos.");
  if(!p||p.duenio!==playerId)throw Error("Ese territorio no es tuyo.");if(n>me.fichasParaColocar)throw Error("No tenés tantos ejércitos.");
  const left=me.fichasParaColocar-n,u={[`paises.${country}.fichas`]:p.fichas+n,[`jugadores.${playerId}.fichasParaColocar`]:left,registro:addLog(s.registro,`${me.nombre} colocó ${n} en ${country}.`)};
@@ -285,14 +287,14 @@ function fight(s,c,nd){const a=s.paises[c.from],d=s.paises[c.to],A=roll(c.dadosA
  const pd=d.fichas-ld,conq=pd<=0,txt=`${s.jugadores[c.atacanteId].nombre}: ${c.from} → ${c.to} (−${la}/−${ld})${conq?" ¡conquistado!":""}`;
  return {[`paises.${c.from}.fichas`]:a.fichas-la,[`paises.${c.to}.fichas`]:conq?1:pd,combate:{...c,estado:conq?"conquista":"fin",ataque:A,defensa:D,la,ld},registro:addLog(s.registro,txt)}}
 async function attack(){const from=$("mFrom").value,to=$("mTo").value,dice=Number($("mAttackCount").value);if(!from||!to)return alert("Elegí un país propio y un objetivo enemigo.");
- try{await runTransaction(db,async tx=>{const ref=roomRef(),snap=await tx.get(ref),s=snap.data(),cb=s.combate;if(s.fase!=="ataque"||s.turnoActual!==playerId)throw Error("No es tu turno de ataque.");if(cb&&(cb.estado==="defensa"||cb.estado==="conquista"))throw Error("Hay un combate sin terminar.");
+ try{await runTx(db,async tx=>{const ref=roomRef(),snap=await tx.get(ref),s=snap.data(),cb=s.combate;if(s.fase!=="ataque"||s.turnoActual!==playerId)throw Error("No es tu turno de ataque.");if(cb&&(cb.estado==="defensa"||cb.estado==="conquista"))throw Error("Hay un combate sin terminar.");
  const a=s.paises[from],d=s.paises[to];if(!a||!d||a.duenio!==playerId||d.duenio===playerId||!ADJ[from]?.includes(to))throw Error("Ataque inválido: deben ser vecinos y el origen tuyo.");if(a.fichas<=1||dice<1||dice>Math.min(3,a.fichas-1))throw Error("Cantidad de dados no válida.");
  const c={id:Date.now().toString(36),from,to,atacanteId:playerId,defensorId:d.duenio,dadosA:dice};
  if(Math.min(3,d.fichas)===1)tx.update(ref,fight(s,c,1));else tx.update(ref,{combate:{...c,estado:"defensa"},registro:addLog(s.registro,`${s.jugadores[playerId].nombre} ataca ${to} desde ${from} (${dice} dados).`)})})}catch(e){alert(e.message)}}
-async function defend(auto){try{await runTransaction(db,async tx=>{const ref=roomRef(),snap=await tx.get(ref),s=snap.data(),c=s.combate;if(!c||c.estado!=="defensa")throw Error("No hay combate pendiente.");if(auto?c.atacanteId!==playerId:c.defensorId!==playerId)throw Error("No te corresponde.");const mx=Math.min(3,s.paises[c.to].fichas),nd=auto?mx:Number($("mDefDice").value);if(!(nd>=1&&nd<=mx))throw Error("Dados no válidos.");tx.update(ref,fight(s,c,nd))})}catch(e){alert(e.message)}}
-async function moveConquest(){const n=Number($("mMoveN").value);try{await runTransaction(db,async tx=>{const ref=roomRef(),snap=await tx.get(ref),s=snap.data(),c=s.combate;if(!c||c.estado!=="conquista"||c.atacanteId!==playerId)throw Error("No hay conquista pendiente.");const a=s.paises[c.from];if(!Number.isInteger(n)||n<1||n>=a.fichas)throw Error("Pasá al menos 1 y dejá al menos 1 en "+c.from+".");
+async function defend(auto){try{await runTx(db,async tx=>{const ref=roomRef(),snap=await tx.get(ref),s=snap.data(),c=s.combate;if(!c||c.estado!=="defensa")throw Error("No hay combate pendiente.");if(auto?c.atacanteId!==playerId:c.defensorId!==playerId)throw Error("No te corresponde.");const mx=Math.min(3,s.paises[c.to].fichas),nd=auto?mx:Number($("mDefDice").value);if(!(nd>=1&&nd<=mx))throw Error("Dados no válidos.");tx.update(ref,fight(s,c,nd))})}catch(e){alert(e.message)}}
+async function moveConquest(){const n=Number($("mMoveN").value);try{await runTx(db,async tx=>{const ref=roomRef(),snap=await tx.get(ref),s=snap.data(),c=s.combate;if(!c||c.estado!=="conquista"||c.atacanteId!==playerId)throw Error("No hay conquista pendiente.");const a=s.paises[c.from];if(!Number.isInteger(n)||n<1||n>=a.fichas)throw Error("Pasá al menos 1 y dejá al menos 1 en "+c.from+".");
  tx.update(ref,{[`paises.${c.from}.fichas`]:a.fichas-n,[`paises.${c.to}.duenio`]:playerId,[`paises.${c.to}.fichas`]:n,combate:{...c,estado:"fin"},registro:addLog(s.registro,`${s.jugadores[playerId].nombre} pasó ${n} a ${c.to}.`),[`jugadores.${playerId}.conquisto`]:true,...winCheck(s,c.to)})})}catch(e){alert(e.message)}}
-async function endTurn(force){const pid=typeof force==="string"?force:playerId;try{await runTransaction(db,async tx=>{const ref=roomRef(),snap=await tx.get(ref),s=snap.data(),c=s.combate;
+async function endTurn(force){const pid=typeof force==="string"?force:playerId;try{await runTx(db,async tx=>{const ref=roomRef(),snap=await tx.get(ref),s=snap.data(),c=s.combate;
  if(s.turnoActual!==pid||s.fase!=="ataque")throw Error("No es tu turno.");
  if(c&&(c.estado==="defensa"||c.estado==="conquista"))throw Error("Terminá el combate antes de cerrar el turno.");
  const me=s.jugadores[pid],u={},ids=(s.turnOrder||Object.keys(s.jugadores)).filter(id=>s.jugadores[id]&&owned(s,id).length>0),i=ids.indexOf(pid);let log=s.registro;
@@ -302,7 +304,7 @@ async function endTurn(force){const pid=typeof force==="string"?force:playerId;t
   Object.assign(u,{fase:"reagrupe",turnoActual:"",registro:addLog(log,"Terminó la rueda de ataques: ¡a reagrupar y sumar ejércitos!")})}
  else{const next=ids[i+1];Object.assign(u,{turnoActual:next,registro:addLog(log,`${me.nombre} terminó. Ataca ${s.jugadores[next].nombre}.`)})}
  tx.update(ref,u)})}catch(e){alert(e.message)}}
-async function readyBtn(){try{await runTransaction(db,async tx=>{const ref=roomRef(),snap=await tx.get(ref),s=snap.data(),me=s.jugadores[playerId];
+async function readyBtn(){try{await runTx(db,async tx=>{const ref=roomRef(),snap=await tx.get(ref),s=snap.data(),me=s.jugadores[playerId];
  if(s.fase!=="reagrupe")throw Error("Ahora no se reagrupa.");
  if((me.fichasParaColocar||0)>0)throw Error("Te faltan colocar ejércitos nuevos.");
  if((me.pool||0)>0)throw Error("Te quedan ejércitos sueltos: ponelos en un país vecino.");
@@ -311,7 +313,7 @@ async function readyBtn(){try{await runTransaction(db,async tx=>{const ref=roomR
   ids.forEach(id=>{u[`jugadores.${id}.listo`]=false;u[`jugadores.${id}.cartaNueva`]=""});
   Object.assign(u,{fase:"ataque",turnoActual:order[0],ronda:r,registro:addLog(u.registro,`Ronda ${r}: ataca ${J[order[0]].nombre}.`)})}
  tx.update(ref,u)})}catch(e){alert(e.message)}}
-async function moveArmy(country,delta){try{await runTransaction(db,async tx=>{const ref=roomRef(),snap=await tx.get(ref),s=snap.data();
+async function moveArmy(country,delta){try{await runTx(db,async tx=>{const ref=roomRef(),snap=await tx.get(ref),s=snap.data();
  if(s.fase!=="reagrupe")throw Error("Se reagrupa cuando termina la rueda de ataques.");
  const me=s.jugadores[playerId],p=s.paises[country],pool=me.pool||0,from=me.poolFrom||"",nuevos=me.fichasParaColocar||0;
  if(me.listo)throw Error("Ya terminaste de reagrupar.");
@@ -322,7 +324,7 @@ async function moveArmy(country,delta){try{await runTransaction(db,async tx=>{co
   tx.update(ref,{[`paises.${country}.fichas`]:p.fichas+1,[`jugadores.${playerId}.pool`]:pool-1,[`jugadores.${playerId}.poolFrom`]:pool-1>0?from:""})}
  else if(nuevos>0)tx.update(ref,{[`paises.${country}.fichas`]:p.fichas+1,[`jugadores.${playerId}.fichasParaColocar`]:nuevos-1});
  else throw Error("No tenés ejércitos para poner: sacá uno con − de un país y pasalo a un vecino.")})}catch(e){alert(e.message)}}
-async function useCard(country){try{await runTransaction(db,async tx=>{const ref=roomRef(),snap=await tx.get(ref),s=snap.data(),me=s.jugadores[playerId],p=s.paises[country];
+async function useCard(country){try{await runTx(db,async tx=>{const ref=roomRef(),snap=await tx.get(ref),s=snap.data(),me=s.jugadores[playerId],p=s.paises[country];
  if(s.fase!=="reagrupe"||me.listo)throw Error("Las cartas se usan durante el reagrupe.");
  if(!(me.cartas||[]).includes(country))throw Error("No tenés esa carta.");
  if(!p||p.duenio!==playerId)throw Error("Todavía no conquistaste ese país.");
@@ -360,7 +362,7 @@ function diceAnim(s){if(!isHost)return;const c=s.combate;if(!c||!c.ataque||!c.de
   setTimeout(()=>ov.classList.add("hidden"),5500)},90)}
 /* ===== Reloj de turno (solo TV) ===== */
 let tmKey="",tmEnd=0,tmBusy=false,tmBeep=-1;
-async function forceReady(){try{await runTransaction(db,async tx=>{const ref=roomRef(),snap=await tx.get(ref),s=snap.data();if(s.fase!=="reagrupe")return;
+async function forceReady(){try{await runTx(db,async tx=>{const ref=roomRef(),snap=await tx.get(ref),s=snap.data();if(s.fase!=="reagrupe")return;
  const J=s.jugadores,ids=Object.keys(J).filter(id=>owned(s,id).length>0),u={};
  ids.forEach(id=>{const me=J[id];if(me.listo)return;const mine=owned(s,id),add={};if((me.pool||0)>0&&me.poolFrom)add[me.poolFrom]=me.pool;
   for(let k=0;k<(me.fichasParaColocar||0);k++){const n=mine[Math.floor(Math.random()*mine.length)];add[n]=(add[n]||0)+1}
@@ -395,7 +397,7 @@ $("mFrom").addEventListener("change",()=>{selectedFrom=$("mFrom").value;populate
 $("mTo").addEventListener("change",()=>{selectedTo=$("mTo").value;if(live)renderMap(live)});
 $("backHomeBtn").addEventListener("click",()=>{if(unsubscribe)unsubscribe();show("home")});
 $("mLeaveBtn").addEventListener("click",()=>{try{localStorage.removeItem("teg_sesion")}catch(e){}if(unsubscribe)unsubscribe();playerId="";show("home")});
-$("sorteoBtn").addEventListener("click",async()=>{try{await runTransaction(db,async tx=>{const ref=roomRef(),snap=await tx.get(ref),d=snap.data();if(d.fase!=="sorteo"||d.jugadores[playerId]?.dadoSorteo)return;tx.update(ref,{[`jugadores.${playerId}.dadoSorteo`]:1+Math.floor(Math.random()*6)})})}catch(e){alert(e.message)}});
+$("sorteoBtn").addEventListener("click",async()=>{try{await runTx(db,async tx=>{const ref=roomRef(),snap=await tx.get(ref),d=snap.data();if(d.fase!=="sorteo"||d.jugadores[playerId]?.dadoSorteo)return;tx.update(ref,{[`jugadores.${playerId}.dadoSorteo`]:1+Math.floor(Math.random()*6)})})}catch(e){alert(e.message)}});
 $("mCountries").addEventListener("click",e=>{const b=e.target.closest("[data-n]");if(!b||!live)return;const n=b.dataset.n;
  if(!$("reinforceCard").classList.contains("hidden")){$("mReinforceCountry").value=n;chips(live,0)}
  else if(!$("attackCard").classList.contains("hidden")){if(![...$("mFrom").options].some(x=>x.value===n))return alert("Para atacar desde ahí necesitás 2 o más ejércitos.");$("mFrom").value=n;$("mFrom").dispatchEvent(new Event("change"));chips(live,0)}});
@@ -404,12 +406,14 @@ const params=new URLSearchParams(location.search);if(params.get("sala")){$("home
  try{const sv=JSON.parse(localStorage.getItem("teg_sesion")||"null");if(sv&&sv.sala&&sv.nombre&&(!params.get("sala")||params.get("sala").toUpperCase()===sv.sala)){$("home").classList.add("hidden");$("mobile").classList.remove("hidden");$("mobileLogin").classList.remove("hidden");$("mCode").value=sv.sala;$("mName").value=sv.nombre;joinRoom(sv.sala,sv.nombre,"mError")}}catch(e){}
 /* ===== Mapa táctil en el celular ===== */
 let mmOpen=false,mmSel="",mmTo="";
-{const st=document.createElement("style");st.textContent=`#mm{position:fixed;inset:0;z-index:50;background:#0e1620;display:flex;align-items:center}#mmSvg{width:100%;height:100%;touch-action:manipulation}#mmHud{position:absolute;left:8px;right:8px;bottom:8px;display:flex;gap:8px;align-items:center;justify-content:center;flex-wrap:wrap;background:#0d1520ee;border:1px solid #314256;border-radius:12px;padding:8px;font-weight:700;color:#fff;font-size:.95rem}#mmHud button{padding:10px 16px;font-size:1rem}#mmClose{position:absolute;top:8px;right:8px;padding:8px 14px}.mmn{animation:mmp .9s infinite alternate}@keyframes mmp{to{stroke-width:2;opacity:.6}}@media (orientation:portrait){#mmSvg{height:auto}}`;document.head.append(st)}
+{const st=document.createElement("style");st.textContent=`#mm{position:fixed;inset:0;z-index:50;background:#0e1620;display:flex}#mmSvg{flex:1;min-width:0;height:100%;touch-action:manipulation}#mmSide{width:215px;flex:none;display:flex;flex-direction:column;gap:8px;padding:8px;padding-right:max(8px,env(safe-area-inset-right));overflow-y:auto;background:#0d1520;border-left:1px solid #314256;color:#fff}#mmHud{font-weight:700;font-size:.9rem;line-height:1.35}#mmHud .r{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}#mmHud .r button{flex:1 1 40%;padding:11px 8px;font-size:1rem}#mmSide>button{padding:8px}.mmb{background:#182231;border-radius:10px;padding:8px;font-size:.85rem}.mmn{animation:mmp .8s infinite alternate}.mml{animation:mmd 1s linear infinite}@keyframes mmp{to{stroke-width:2.5;opacity:.65}}@keyframes mmd{to{stroke-dashoffset:-32}}@media (orientation:portrait){#mm{flex-direction:column}#mmSvg{height:auto;flex:1}#mmSide{width:auto;max-height:42%;border-left:0;border-top:1px solid #314256}}`;document.head.append(st)}
 const mmBox=document.createElement("div");mmBox.id="mm";mmBox.className="hidden";
-mmBox.innerHTML='<svg id="mmSvg" viewBox="0 0 1024 724" preserveAspectRatio="xMidYMid meet"></svg><div id="mmHud"></div><button id="mmClose" class="secondary">✕ Cerrar</button>';document.body.append(mmBox);
+mmBox.innerHTML='<svg id="mmSvg" viewBox="0 0 1024 724" preserveAspectRatio="xMidYMid meet"></svg><div id="mmSide"><button id="mmClose" class="secondary">✕ Cerrar mapa</button><div id="mmHud"></div><div id="mmBat"></div></div>';document.body.append(mmBox);
 const mmBtn=document.createElement("button");mmBtn.className="blue";mmBtn.textContent="🗺️ Abrir mapa táctil (celu de costado)";mmBtn.style.cssText="margin:12px;width:calc(100% - 24px)";$("mobileGame").prepend(mmBtn);
 mmBtn.onclick=()=>{mmOpen=true;mmBox.classList.remove("hidden");try{screen.orientation.lock("landscape").catch(()=>{})}catch(e){}mmRender()};
 $("mmClose").onclick=()=>{mmOpen=false;mmBox.classList.add("hidden");try{screen.orientation.unlock()}catch(e){}};
+const mmLogBox=document.createElement("details");mmLogBox.className="panel action-card";mmLogBox.open=true;mmLogBox.innerHTML='<summary style="font-weight:800;cursor:pointer">📜 Batallas</summary><div id="mLogList" class="tiny" style="max-height:170px;overflow:auto;margin-top:8px;line-height:1.5"></div>';$("mObjective").closest(".panel").after(mmLogBox);
+function mmLog(){const el=$("mLogList"),h=(live?.registro||[]).map(x=>"• "+escapeHtml(x)).join("<br>")||"Todavía no hay batallas.";if(el.dataset.h!==h){el.innerHTML=h;el.dataset.h=h}}
 function mmTap(name){
  const s=live;if(!s)return;const me=s.jugadores?.[playerId],p=s.paises[name];if(!me||!p)return;
  const f=s.fase,my=s.turnoActual===playerId,cb=s.combate,n=me.fichasParaColocar||0,mine=p.duenio===playerId;
@@ -419,37 +423,50 @@ function mmTap(name){
   if(mine){if(p.fichas>1){mmSel=name;mmTo=""}}else if(mmSel&&ADJ[mmSel]?.includes(name))mmTo=name;
   mmRender()}
 }
+function mmDie(v,w){return `<span style="display:inline-grid;place-items:center;width:28px;height:28px;border-radius:7px;margin:2px;font-weight:900;color:#15202b;background:${w?"#f4f7fb":"#6b7785"};${w?"":"opacity:.55;text-decoration:line-through"}">${v}</span>`}
 function mmRender(){
  if(!mmOpen||!live)return;const s=live,me=s.jugadores?.[playerId];if(!me)return;
  const f=s.fase,my=s.turnoActual===playerId,cb=s.combate,n=me.fichasParaColocar||0,wait=cb?.estado==="defensa",conq=cb?.estado==="conquista",isDef=wait&&cb.defensorId===playerId,
   place=(f==="colocacion"||(my&&f==="incorporacion"))&&n>0,rg=f==="reagrupe"&&!me.listo,atk=my&&f==="ataque"&&!wait&&!conq;
- if(!atk){mmTo=""}if(!(rg||atk)||s.paises[mmSel]?.duenio!==playerId||(atk&&s.paises[mmSel].fichas<2))mmSel=atk||rg?(s.paises[mmSel]?.duenio===playerId&&(rg||s.paises[mmSel].fichas>1)?mmSel:""):"";
- const nb=atk&&mmSel?(ADJ[mmSel]||[]).filter(x=>s.paises[x]&&s.paises[x].duenio!==playerId):[],
-  rgNb=rg&&me.pool&&me.poolFrom?(ADJ[me.poolFrom]||[]).filter(x=>s.paises[x]?.duenio===playerId):[],hot=new Set(isDef||(wait&&my)||conq?[cb.from,cb.to]:[]);
+ if(!(s.paises[mmSel]?.duenio===playerId&&((atk&&s.paises[mmSel].fichas>1)||rg)))mmSel="";if(!atk)mmTo="";
+ const mine=Object.keys(s.paises).filter(k=>s.paises[k].duenio===playerId),can=atk&&!mmSel?mine.filter(k=>s.paises[k].fichas>1):[],
+  nb=atk&&mmSel?(ADJ[mmSel]||[]).filter(x=>s.paises[x]&&s.paises[x].duenio!==playerId):[],
+  rgNb=rg&&me.pool&&me.poolFrom?(ADJ[me.poolFrom]||[]).filter(x=>s.paises[x]?.duenio===playerId):[],
+  fight=cb&&(wait||conq)?[cb.from,cb.to]:[],tg=mmTo?[mmTo]:nb;
  const svg=$("mmSvg");svg.innerHTML="";svg.append(svgEl("image",{href:MAPIMG,x:0,y:0,width:1024,height:724}));
  const done=new Set();Object.entries(ADJ).forEach(([a,ns])=>ns.forEach(b=>{const k=[a,b].sort().join("|");if(done.has(k)||!POS[a]||!POS[b])return;done.add(k);svg.append(svgEl("line",{x1:POS[a][0],y1:POS[a][1],x2:POS[b][0],y2:POS[b][1],class:"map-link"}))}));
- ALL.forEach(name=>{const p=s.paises?.[name];if(!p)return;const [x,y]=POS[name],mine=p.duenio===playerId,g=svgEl("g",{});
-  const dim=(atk&&mmSel&&name!==mmSel&&!nb.includes(name))||(rg&&rgNb.length&&!rgNb.includes(name)&&name!==me.poolFrom);
-  g.style.opacity=dim?.4:1;
-  const isN=nb.includes(name)||rgNb.includes(name),isSel=name===mmSel||name===mmTo||hot.has(name);
-  const c=svgEl("circle",{cx:x,cy:y,r:isSel||isN?27:23,fill:s.jugadores?.[p.duenio]?.color||"#536273",class:"territory"+(isN?" mmn":""),stroke:name===mmTo?"#ff4d4d":isSel?"#ffd166":isN?"#ff4d4d":(mine&&(place||rg||atk)?"#fff":"#e6edf5"),"stroke-width":isSel?6:isN?5:2.5});
-  g.append(c);g.append(svgEl("text",{x,y:y+6,class:"army-label",style:"font-size:18px"},p.fichas));
-  g.append(svgEl("text",{x,y:y+41,class:"territory-label",style:"font-size:12px"},name));
-  g.addEventListener("click",()=>mmTap(name));svg.append(g)});
- const hud=$("mmHud");let h="",acts=[];
- if(s.estado==="fin")h="🏆 Ganó "+playerName(s,s.ganador);
- else if(isDef){const mx=Math.min(3,s.paises[cb.to].fichas);h=`🛡️ ${escapeHtml(playerName(s,cb.atacanteId))} ataca ${escapeHtml(cb.to)} desde ${escapeHtml(cb.from)} (${cb.dadosA}🎲). Defendé con:`;for(let i=mx;i>=1;i--)acts.push([`🎲 ${i}`,()=>$("mDefBtns").querySelector(`[data-d="${i}"]`)?.click(),"blue"])}
- else if(wait)h=`⏳ Esperando que ${escapeHtml(playerName(s,cb.defensorId))} elija dados…`;
- else if(conq&&my){const mx=s.paises[cb.from].fichas-1;h=`🏴 ¡Conquistaste ${escapeHtml(cb.to)}! Pasá ejércitos:`;[...new Set([1,Math.ceil(mx/2),mx])].filter(k=>k>=1).forEach(k=>acts.push([k===mx&&mx>1?`Todos (${k})`:`${k}`,()=>{$("mMoveN").value=k;moveConquest()},"good"]))}
- else if(place)h=`🪖 Te quedan <b>${n}</b>: tocá tus países para sumar 1 a cada uno.`;
- else if(rg){h=`🔄 Reagrupe · Nuevos: ${me.fichasParaColocar||0} · Sueltos: ${me.pool||0}${me.pool?" (de "+escapeHtml(me.poolFrom)+")":""}<br>`+(mmSel?`${escapeHtml(mmSel)}: ${s.paises[mmSel].fichas}`:"Tocá uno de tus países");
-  if(mmSel){acts.push(["−",()=>moveArmy(mmSel,-1),"secondary"],["+",()=>moveArmy(mmSel,1),"blue"])}acts.push(["✔ Listo",()=>$("mEndRegroupBtn").click(),"good"])}
- else if(atk){if(!mmSel)h="⚔️ Tocá tu país desde donde atacar";else if(!mmTo)h=`Atacás desde <b>${escapeHtml(mmSel)}</b>. Tocá un país rojo para atacarlo.`;
-  else{h=`${escapeHtml(mmSel)} ➜ <b>${escapeHtml(mmTo)}</b> · ¿Cuántos dados?`;for(let d=1;d<=Math.min(3,s.paises[mmSel].fichas-1);d++)acts.push([`🎲 ${d}`,()=>{const F=$("mFrom"),T=$("mTo"),C=$("mAttackCount");F.innerHTML=T.innerHTML=C.innerHTML="";F.add(new Option(mmSel,mmSel));T.add(new Option(mmTo,mmTo));C.add(new Option(d,d));mmTo="";attack()},"danger"])}
+ const arrows=(atk&&mmSel?tg.map(t=>[mmSel,t]):[]).concat(fight.length?[fight]:[]);
+ arrows.forEach(([a,b])=>svg.append(svgEl("line",{x1:POS[a][0],y1:POS[a][1],x2:POS[b][0],y2:POS[b][1],stroke:"#ff4d4d","stroke-width":6,"stroke-dasharray":"14 8",class:"mml",opacity:.95})));
+ const badges=[];
+ ALL.forEach(name=>{const p=s.paises?.[name];if(!p)return;const [x,y]=POS[name],isMine=p.duenio===playerId,g=svgEl("g",{});
+  const isSel=name===mmSel,isTg=tg.includes(name)&&atk&&mmSel,isCan=can.includes(name),isFight=fight.includes(name),isRg=rgNb.includes(name);
+  const focus=isSel||isTg||isCan||isFight||isRg||(rg&&name===mmSel);
+  const dim=(atk&&mmSel&&!isSel&&!isTg)||(atk&&!mmSel&&!isCan)||(fight.length&&!isFight)||(rg&&rgNb.length&&!isRg&&name!==me.poolFrom);
+  g.style.opacity=dim?.25:1;
+  const hl=isSel||isFight||(rg&&name===mmSel);
+  g.append(svgEl("circle",{cx:x,cy:y,r:hl||isTg?31:isCan||isRg?27:23,fill:s.jugadores?.[p.duenio]?.color||"#536273",class:"territory"+(isTg||isCan||isRg?" mmn":""),stroke:isTg?"#ff4d4d":hl?"#ffd166":isCan||isRg?"#fff":(isMine&&(place||rg)?"#fff":"#e6edf5"),"stroke-width":isTg?8:hl?7:isCan||isRg?5:2.5}));
+  g.append(svgEl("text",{x,y:y+6,class:"army-label",style:"font-size:18px"},p.fichas));
+  g.append(svgEl("text",{x,y:y+(hl||isTg?47:41),class:"territory-label",style:"font-size:12px"},name));
+  g.addEventListener("click",()=>mmTap(name));svg.append(g);
+  if(isFight)badges.push([x,y,name===cb.from?"ATACA":"DEFIENDE",name===cb.from?"#ff6b6b":"#6cb6ff"]);
+  else if(isSel&&atk)badges.push([x,y,"DESDE AQUÍ","#ffd166"]);
+  else if(isTg)badges.push([x,y,name===mmTo?"OBJETIVO":"⚔ ATACABLE","#ff6b6b"])});
+ badges.forEach(([x,y,t,c])=>svg.append(svgEl("text",{x,y:y-42,style:`font-size:15px;font-weight:900;fill:${c};text-anchor:middle;paint-order:stroke;stroke:#10151d;stroke-width:5px;stroke-linejoin:round;pointer-events:none`},t)));
+ let h="",acts=[];
+ if(s.estado==="fin")h="🏆 Ganó "+escapeHtml(playerName(s,s.ganador));
+ else if(isDef){const mx=Math.min(3,s.paises[cb.to].fichas);h=`🛡️ ¡Te atacan! (${cb.dadosA} 🎲) Defendé con:`;for(let i=mx;i>=1;i--)acts.push([`🎲 ${i}`,()=>$("mDefBtns").querySelector(`[data-d="${i}"]`)?.click(),"blue"])}
+ else if(wait)h="⏳ Esperando que el defensor elija sus dados…";
+ else if(conq&&my){const mx=s.paises[cb.from].fichas-1;h="🏴 ¡Conquistaste! Pasá ejércitos:";[...new Set([1,Math.ceil(mx/2),mx])].filter(k=>k>=1).forEach(k=>acts.push([k===mx&&mx>1?`Todos (${k})`:`${k}`,()=>{$("mMoveN").value=k;moveConquest()},"good"]))}
+ else if(place)h=`🪖 Te quedan <b>${n}</b>. Tocá tus países para sumar 1.`;
+ else if(rg){h=`🔄 Reagrupe<br>Nuevos: ${me.fichasParaColocar||0} · Sueltos: ${me.pool||0}${me.pool?" (de "+escapeHtml(me.poolFrom)+")":""}<br>`+(mmSel?`<b>${escapeHtml(mmSel)}</b>: ${s.paises[mmSel].fichas}`:"Tocá uno de tus países");
+  if(mmSel)acts.push(["−",()=>moveArmy(mmSel,-1),"secondary"],["+",()=>moveArmy(mmSel,1),"blue"]);acts.push(["✔ Listo",()=>$("mEndRegroupBtn").click(),"good"])}
+ else if(atk){if(!mmSel)h="⚔️ Tocá un país tuyo <b>(con borde blanco)</b> desde donde atacar.";else if(!mmTo)h=`Atacás desde <b>${escapeHtml(mmSel)}</b>. Tocá un país marcado en rojo.`;
+  else{h=`<b>${escapeHtml(mmSel)}</b> ➜ <b>${escapeHtml(mmTo)}</b><br>¿Cuántos dados?`;for(let d=1;d<=Math.min(3,s.paises[mmSel].fichas-1);d++)acts.push([`🎲 ${d}`,()=>{const F=$("mFrom"),T=$("mTo"),C=$("mAttackCount");F.innerHTML=T.innerHTML=C.innerHTML="";F.add(new Option(mmSel,mmSel));T.add(new Option(mmTo,mmTo));C.add(new Option(d,d));mmTo="";attack()},"danger"])}
   acts.push(["Terminar ataques",()=>$("mSkipAttackBtn").click(),"secondary"])}
  else h=escapeHtml($("mMessage").textContent);
- if(cb&&cb.estado==="fin"&&cb.ataque)h+=`<br>${escapeHtml(cb.from)} ➜ ${escapeHtml(cb.to)}: 🎲 ${cb.ataque.join(" ")} vs ${(cb.defensa||[]).join(" ")}`;
- hud.innerHTML=`<span>${h}</span>`;acts.forEach(([t,fn,cl])=>{const b=document.createElement("button");b.className=cl;b.textContent=t;b.onclick=fn;hud.append(b)})}
+ const hud=$("mmHud");hud.innerHTML=`<div>${h}</div>`;if(acts.length){const r=document.createElement("div");r.className="r";acts.forEach(([t,fn,cl])=>{const b=document.createElement("button");b.className=cl;b.textContent=t;b.onclick=fn;r.append(b)});hud.append(r)}
+ let bt="";if(cb?.ataque&&cb.defensa&&cb.estado!=="defensa"){const A=cb.ataque,D=cb.defensa,k=Math.min(A.length,D.length);bt=`<div class="mmb"><b>🎲 Última batalla</b><div>⚔️ ${A.map((v,i)=>mmDie(v,i<k&&v>D[i])).join("")}</div><div>🛡️ ${D.map((v,i)=>mmDie(v,i<k&&!(A[i]>v))).join("")}</div><div style="margin-top:4px">Atacante −${cb.la} · Defensor −${cb.ld}</div></div>`}
+ $("mmBat").innerHTML=bt}
 
 </script>
 <div id="diceOverlay" class="hidden"></div>
