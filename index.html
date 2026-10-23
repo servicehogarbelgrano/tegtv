@@ -247,7 +247,7 @@ function renderMobile(s){renderMobileBase(s);showWin(s);const me=s.jugadores?.[p
  else if(isDef){st="¡Te atacan!";msg="Elegí con cuántos dados defender."}
  else if(f==="reagrupe"){st="Reagrupe";const cn=me.cartaNueva;msg=me.listo?"✔ Listo. Esperando a los demás.":"Sumá tus ejércitos nuevos con + y mové entre países vecinos con − y +."+(cn?` Sacaste la carta ${cn}`+(s.paises[cn]?.duenio===playerId?": es tu país, tocá la carta para sumar 2.":": la guardás hasta conquistar ese país."):"")}
   else if(my&&f==="ataque")msg=conq?"¡Conquistaste! Elegí cuántos ejércitos pasar.":wait?`Esperando que ${playerName(s,cb.defensorId)} elija sus dados…`:"Atacá o terminá tu turno.";
- if(st)$("mStatus").textContent=st;if(msg)$("mMessage").textContent=msg;chips(s,me);cards(s,me);atkDice(!!(wait||conq));haptics(s,me,isDef,my)}
+ if(st)$("mStatus").textContent=st;if(msg)$("mMessage").textContent=msg;chips(s,me);cards(s,me);atkDice(!!(wait||conq));haptics(s,me,isDef,my);mmRender()}
 function chips(s,me){const mine=owned(s,playerId),rv=!$("reinforceCard").classList.contains("hidden"),av=!$("attackCard").classList.contains("hidden"),cur=rv?$("mReinforceCountry").value:av?$("mFrom").value:"";
  const rg=s.fase==="reagrupe"&&!s.jugadores?.[playerId]?.listo,jp=s.jugadores?.[playerId]||{};$("rgBar").classList.toggle("hidden",!rg);$("rgPool").textContent="Nuevos: "+(jp.fichasParaColocar||0)+" · Sueltos: "+(jp.pool||0)+(jp.pool?" (de "+jp.poolFrom+")":"");
  $("mCountries").innerHTML=mine.map(n=>rg?`<span class="pill rg"><button data-m="${escapeHtml(n)}">−</button>${escapeHtml(n)} · ${s.paises[n].fichas}<button data-p="${escapeHtml(n)}">+</button></span>`:`<button class="pill tcell${n===cur?" sel":""}" data-n="${escapeHtml(n)}">${escapeHtml(n)} · ${s.paises[n].fichas}</button>`).join("");
@@ -402,6 +402,55 @@ $("mCountries").addEventListener("click",e=>{const b=e.target.closest("[data-n]"
 $("mTargets").addEventListener("click",e=>{const b=e.target.closest("[data-t]");if(!b||!live)return;$("mTo").value=b.dataset.t;$("mTo").dispatchEvent(new Event("change"));chips(live,0)});
 const params=new URLSearchParams(location.search);if(params.get("sala")){$("home").classList.add("hidden");$("mobile").classList.remove("hidden");$("mobileLogin").classList.remove("hidden");$("mCode").value=params.get("sala").toUpperCase()}
  try{const sv=JSON.parse(localStorage.getItem("teg_sesion")||"null");if(sv&&sv.sala&&sv.nombre&&(!params.get("sala")||params.get("sala").toUpperCase()===sv.sala)){$("home").classList.add("hidden");$("mobile").classList.remove("hidden");$("mobileLogin").classList.remove("hidden");$("mCode").value=sv.sala;$("mName").value=sv.nombre;joinRoom(sv.sala,sv.nombre,"mError")}}catch(e){}
+/* ===== Mapa táctil en el celular ===== */
+let mmOpen=false,mmSel="",mmTo="";
+{const st=document.createElement("style");st.textContent=`#mm{position:fixed;inset:0;z-index:50;background:#0e1620;display:flex;align-items:center}#mmSvg{width:100%;height:100%;touch-action:manipulation}#mmHud{position:absolute;left:8px;right:8px;bottom:8px;display:flex;gap:8px;align-items:center;justify-content:center;flex-wrap:wrap;background:#0d1520ee;border:1px solid #314256;border-radius:12px;padding:8px;font-weight:700;color:#fff;font-size:.95rem}#mmHud button{padding:10px 16px;font-size:1rem}#mmClose{position:absolute;top:8px;right:8px;padding:8px 14px}.mmn{animation:mmp .9s infinite alternate}@keyframes mmp{to{stroke-width:2;opacity:.6}}@media (orientation:portrait){#mmSvg{height:auto}}`;document.head.append(st)}
+const mmBox=document.createElement("div");mmBox.id="mm";mmBox.className="hidden";
+mmBox.innerHTML='<svg id="mmSvg" viewBox="0 0 1024 724" preserveAspectRatio="xMidYMid meet"></svg><div id="mmHud"></div><button id="mmClose" class="secondary">✕ Cerrar</button>';document.body.append(mmBox);
+const mmBtn=document.createElement("button");mmBtn.className="blue";mmBtn.textContent="🗺️ Abrir mapa táctil (celu de costado)";mmBtn.style.cssText="margin:12px;width:calc(100% - 24px)";$("mobileGame").prepend(mmBtn);
+mmBtn.onclick=()=>{mmOpen=true;mmBox.classList.remove("hidden");try{screen.orientation.lock("landscape").catch(()=>{})}catch(e){}mmRender()};
+$("mmClose").onclick=()=>{mmOpen=false;mmBox.classList.add("hidden");try{screen.orientation.unlock()}catch(e){}};
+function mmTap(name){
+ const s=live;if(!s)return;const me=s.jugadores?.[playerId],p=s.paises[name];if(!me||!p)return;
+ const f=s.fase,my=s.turnoActual===playerId,cb=s.combate,n=me.fichasParaColocar||0,mine=p.duenio===playerId;
+ if(((f==="colocacion")||(my&&f==="incorporacion"))&&n>0){if(!mine)return;const sel=$("mReinforceCountry");if(![...sel.options].some(o=>o.value===name))sel.add(new Option(name,name));sel.value=name;$("mReinforceAmount").value=1;placeArmies();return}
+ if(f==="reagrupe"&&!me.listo){if(mine){mmSel=name;mmRender()}return}
+ if(my&&f==="ataque"&&cb?.estado!=="defensa"&&cb?.estado!=="conquista"){
+  if(mine){if(p.fichas>1){mmSel=name;mmTo=""}}else if(mmSel&&ADJ[mmSel]?.includes(name))mmTo=name;
+  mmRender()}
+}
+function mmRender(){
+ if(!mmOpen||!live)return;const s=live,me=s.jugadores?.[playerId];if(!me)return;
+ const f=s.fase,my=s.turnoActual===playerId,cb=s.combate,n=me.fichasParaColocar||0,wait=cb?.estado==="defensa",conq=cb?.estado==="conquista",isDef=wait&&cb.defensorId===playerId,
+  place=(f==="colocacion"||(my&&f==="incorporacion"))&&n>0,rg=f==="reagrupe"&&!me.listo,atk=my&&f==="ataque"&&!wait&&!conq;
+ if(!atk){mmTo=""}if(!(rg||atk)||s.paises[mmSel]?.duenio!==playerId||(atk&&s.paises[mmSel].fichas<2))mmSel=atk||rg?(s.paises[mmSel]?.duenio===playerId&&(rg||s.paises[mmSel].fichas>1)?mmSel:""):"";
+ const nb=atk&&mmSel?(ADJ[mmSel]||[]).filter(x=>s.paises[x]&&s.paises[x].duenio!==playerId):[],
+  rgNb=rg&&me.pool&&me.poolFrom?(ADJ[me.poolFrom]||[]).filter(x=>s.paises[x]?.duenio===playerId):[],hot=new Set(isDef||(wait&&my)||conq?[cb.from,cb.to]:[]);
+ const svg=$("mmSvg");svg.innerHTML="";svg.append(svgEl("image",{href:MAPIMG,x:0,y:0,width:1024,height:724}));
+ const done=new Set();Object.entries(ADJ).forEach(([a,ns])=>ns.forEach(b=>{const k=[a,b].sort().join("|");if(done.has(k)||!POS[a]||!POS[b])return;done.add(k);svg.append(svgEl("line",{x1:POS[a][0],y1:POS[a][1],x2:POS[b][0],y2:POS[b][1],class:"map-link"}))}));
+ ALL.forEach(name=>{const p=s.paises?.[name];if(!p)return;const [x,y]=POS[name],mine=p.duenio===playerId,g=svgEl("g",{});
+  const dim=(atk&&mmSel&&name!==mmSel&&!nb.includes(name))||(rg&&rgNb.length&&!rgNb.includes(name)&&name!==me.poolFrom);
+  g.style.opacity=dim?.4:1;
+  const isN=nb.includes(name)||rgNb.includes(name),isSel=name===mmSel||name===mmTo||hot.has(name);
+  const c=svgEl("circle",{cx:x,cy:y,r:isSel||isN?27:23,fill:s.jugadores?.[p.duenio]?.color||"#536273",class:"territory"+(isN?" mmn":""),stroke:name===mmTo?"#ff4d4d":isSel?"#ffd166":isN?"#ff4d4d":(mine&&(place||rg||atk)?"#fff":"#e6edf5"),"stroke-width":isSel?6:isN?5:2.5});
+  g.append(c);g.append(svgEl("text",{x,y:y+6,class:"army-label",style:"font-size:18px"},p.fichas));
+  g.append(svgEl("text",{x,y:y+41,class:"territory-label",style:"font-size:12px"},name));
+  g.addEventListener("click",()=>mmTap(name));svg.append(g)});
+ const hud=$("mmHud");let h="",acts=[];
+ if(s.estado==="fin")h="🏆 Ganó "+playerName(s,s.ganador);
+ else if(isDef){const mx=Math.min(3,s.paises[cb.to].fichas);h=`🛡️ ${escapeHtml(playerName(s,cb.atacanteId))} ataca ${escapeHtml(cb.to)} desde ${escapeHtml(cb.from)} (${cb.dadosA}🎲). Defendé con:`;for(let i=mx;i>=1;i--)acts.push([`🎲 ${i}`,()=>$("mDefBtns").querySelector(`[data-d="${i}"]`)?.click(),"blue"])}
+ else if(wait)h=`⏳ Esperando que ${escapeHtml(playerName(s,cb.defensorId))} elija dados…`;
+ else if(conq&&my){const mx=s.paises[cb.from].fichas-1;h=`🏴 ¡Conquistaste ${escapeHtml(cb.to)}! Pasá ejércitos:`;[...new Set([1,Math.ceil(mx/2),mx])].filter(k=>k>=1).forEach(k=>acts.push([k===mx&&mx>1?`Todos (${k})`:`${k}`,()=>{$("mMoveN").value=k;moveConquest()},"good"]))}
+ else if(place)h=`🪖 Te quedan <b>${n}</b>: tocá tus países para sumar 1 a cada uno.`;
+ else if(rg){h=`🔄 Reagrupe · Nuevos: ${me.fichasParaColocar||0} · Sueltos: ${me.pool||0}${me.pool?" (de "+escapeHtml(me.poolFrom)+")":""}<br>`+(mmSel?`${escapeHtml(mmSel)}: ${s.paises[mmSel].fichas}`:"Tocá uno de tus países");
+  if(mmSel){acts.push(["−",()=>moveArmy(mmSel,-1),"secondary"],["+",()=>moveArmy(mmSel,1),"blue"])}acts.push(["✔ Listo",()=>$("mEndRegroupBtn").click(),"good"])}
+ else if(atk){if(!mmSel)h="⚔️ Tocá tu país desde donde atacar";else if(!mmTo)h=`Atacás desde <b>${escapeHtml(mmSel)}</b>. Tocá un país rojo para atacarlo.`;
+  else{h=`${escapeHtml(mmSel)} ➜ <b>${escapeHtml(mmTo)}</b> · ¿Cuántos dados?`;for(let d=1;d<=Math.min(3,s.paises[mmSel].fichas-1);d++)acts.push([`🎲 ${d}`,()=>{const F=$("mFrom"),T=$("mTo"),C=$("mAttackCount");F.innerHTML=T.innerHTML=C.innerHTML="";F.add(new Option(mmSel,mmSel));T.add(new Option(mmTo,mmTo));C.add(new Option(d,d));mmTo="";attack()},"danger"])}
+  acts.push(["Terminar ataques",()=>$("mSkipAttackBtn").click(),"secondary"])}
+ else h=escapeHtml($("mMessage").textContent);
+ if(cb&&cb.estado==="fin"&&cb.ataque)h+=`<br>${escapeHtml(cb.from)} ➜ ${escapeHtml(cb.to)}: 🎲 ${cb.ataque.join(" ")} vs ${(cb.defensa||[]).join(" ")}`;
+ hud.innerHTML=`<span>${h}</span>`;acts.forEach(([t,fn,cl])=>{const b=document.createElement("button");b.className=cl;b.textContent=t;b.onclick=fn;hud.append(b)})}
+
 </script>
 <div id="diceOverlay" class="hidden"></div>
 </body>
