@@ -27,7 +27,7 @@
     <button id="hostBtn">Crear sala en esta pantalla (TV)</button>
     <button id="showJoinBtn" class="blue">Entrar desde un celular</button>
     <div id="joinBox" class="stack hidden">
-      <label>Código de sala<input id="joinCode" maxlength="4" placeholder="AB12" autocomplete="off"></label>
+      <label>Código de sala<input id="joinCode" maxlength="6" placeholder="AB12CD" autocomplete="off"></label>
       <label>Tu nombre<input id="joinName" maxlength="24" placeholder="Nombre de jugador"></label>
       <button id="joinBtn" class="good">Unirme a la partida</button>
     </div>
@@ -65,7 +65,7 @@
 <section id="mobile" class="hidden">
   <div class="mobile-head">T.E.G. · CONTROL DE JUGADOR</div>
   <div id="mobileLogin" class="screen mobile stack">
-    <div class="panel stack"><h2>Entrar a una sala</h2><label>Código<input id="mCode" maxlength="4" autocomplete="off"></label><label>Tu nombre<input id="mName" maxlength="24" placeholder="Nombre"></label><button id="mJoinBtn" class="good">Conectarme</button><div id="mError" class="warn hidden"></div></div>
+    <div class="panel stack"><h2>Entrar a una sala</h2><label>Código<input id="mCode" maxlength="6" autocomplete="off"></label><label>Tu nombre<input id="mName" maxlength="24" placeholder="Nombre"></label><button id="mJoinBtn" class="good">Conectarme</button><div id="mError" class="warn hidden"></div></div>
   </div>
   <div id="mobileGame" class="hidden mobile">
     <div class="panel action-card objective"><div class="phase">Objetivo secreto</div><h3 id="mObjective">Se asignará al entrar</h3><p class="tiny muted">No muestres esta pantalla a los demás jugadores.</p></div>
@@ -110,7 +110,7 @@ function show(id){["home","lobby","tvGame","mobile"].forEach(x=>$(x).classList.t
 function escapeHtml(s){return String(s??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]))}
 function err(id,msg){$(id).textContent=msg;$(id).classList.remove("hidden")}
 function clearErr(id){$(id).textContent="";$(id).classList.add("hidden")}
-function randomCode(){return Math.random().toString(36).slice(2,6).toUpperCase()}
+function randomCode(){const AL='ABCDEFGHJKLMNPQRSTUVWXYZ23456789';return Array.from(crypto.getRandomValues(new Uint8Array(6)),b=>AL[b%32]).join('')}
 function shuffle(a){for(let i=a.length-1;i>0;i--){let j=Math.floor(Math.random()*(i+1));[a[i],a[j]]=[a[j],a[i]]}return a}
 function objectiveFor(playerName, assigned){const opts=[
 {label:"Controlá América del Sur y África",test:s=>continentOwner(s,"América del Sur",playerId)&&continentOwner(s,"África",playerId)},
