@@ -265,8 +265,10 @@ function showWin(s){let el=$("winBanner");if(!el){el=document.createElement("div
 function sorteoTV(s){
  const J=s.jugadores||{},ids=Object.keys(J);
  $("tvStatus").textContent="Sorteo: tiren el dado desde el celular";$("tvCurrent").textContent="Empieza el que saque el número más alto";
- $("tvBattle").innerHTML=ids.map(id=>`<div class="player-row"><span class="dot" style="background:${J[id].color}"></span><span class="name">${escapeHtml(J[id].nombre)}</span><strong>${J[id].dadoSorteo||"?"}</strong></div>`).join("");
- if(sorteoBusy||!ids.length||ids.some(id=>!J[id].dadoSorteo))return;
+ ids.forEach(id=>{const v=J[id].dadoSorteo||0;if(!v){delete sorteoSeen[id];return}if(sorteoSeen[id]!==v){sorteoSeen[id]=v;sorteoRoll[id]=Date.now()+1400;try{sfx.dice()}catch(e){}clearInterval(sorteoIv);sorteoIv=setInterval(()=>{const now=Date.now(),act=Object.keys(sorteoRoll).filter(k=>sorteoRoll[k]>now);document.querySelectorAll(".sdie").forEach(el=>{if(act.includes(el.dataset.id))el.textContent=face(1+Math.floor(Math.random()*6))});if(!act.length){clearInterval(sorteoIv);if(live)sorteoTV(live)}},90)}});
+ const rolling=id=>(sorteoRoll[id]||0)>Date.now();
+ $("tvBattle").innerHTML=ids.map(id=>`<div class="player-row"><span class="dot" style="background:${J[id].color}"></span><span class="name">${escapeHtml(J[id].nombre)}</span><span class="sdie" data-id="${id}" style="font-size:2.8rem;line-height:1">${rolling(id)?face(1+Math.floor(Math.random()*6)):J[id].dadoSorteo?face(J[id].dadoSorteo):"❔"}</span><strong>${J[id].dadoSorteo&&!rolling(id)?J[id].dadoSorteo:""}</strong></div>`).join("");
+ if(sorteoBusy||!ids.length||ids.some(id=>!J[id].dadoSorteo||rolling(id)))return;
  sorteoBusy=true;
  const max=Math.max(...ids.map(id=>J[id].dadoSorteo)),tops=ids.filter(id=>J[id].dadoSorteo===max);
  if(tops.length>1){$("tvStatus").textContent="¡Empate! Vuelven a tirar los empatados";
@@ -425,7 +427,7 @@ function mmTap(name){
   if(mine){if(p.fichas>1){mmSel=name;mmTo=""}}else if(mmSel&&ADJ[mmSel]?.includes(name))mmTo=name;
   mmRender()}
 }
-async function mmMany(c,d,k){for(let i=0;i<k;i++){if(!await moveArmy(c,d))break}}
+function mmMany(c,d,k){return moveBulk(c,d*k)}
 function mmDie(v,w){return `<span style="display:inline-grid;place-items:center;width:28px;height:28px;border-radius:7px;margin:2px;font-weight:900;color:#15202b;background:${w?"#f4f7fb":"#6b7785"};${w?"":"opacity:.55;text-decoration:line-through"}">${v}</span>`}
 function mmRender(){
  if(!mmOpen||!live)return;const s=live,me=s.jugadores?.[playerId];if(!me)return;
@@ -436,7 +438,7 @@ function mmRender(){
   nb=atk&&mmSel?(ADJ[mmSel]||[]).filter(x=>s.paises[x]&&s.paises[x].duenio!==playerId):[],
   rgNb=rg?(me.pool&&me.poolFrom?(ADJ[me.poolFrom]||[]):mmSel?(ADJ[mmSel]||[]):[]).filter(x=>s.paises[x]?.duenio===playerId):[],
   fight=cb&&(wait||conq)?[cb.from,cb.to]:[],tg=mmTo?[mmTo]:nb;
- const svg=$("mmSvg");svg.innerHTML="";svg.append(svgEl("image",{href:MAPIMG,x:0,y:0,width:1024,height:724}));
+ const svg=$("mmSvg");let img=svg.querySelector("image");if(!img)img=svgEl("image",{href:MAPIMG,x:0,y:0,width:1024,height:724});[...svg.children].forEach(c=>{if(c!==img)c.remove()});if(!img.parentNode)svg.prepend(img);
  const done=new Set();Object.entries(ADJ).forEach(([a,ns])=>ns.forEach(b=>{const k=[a,b].sort().join("|");if(done.has(k)||!POS[a]||!POS[b])return;done.add(k);svg.append(svgEl("line",{x1:POS[a][0],y1:POS[a][1],x2:POS[b][0],y2:POS[b][1],class:"map-link"}))}));
  const arrows=(atk&&mmSel?tg.map(t=>[mmSel,t]):[]).concat(fight.length?[fight]:[]);
  arrows.forEach(([a,b])=>svg.append(svgEl("line",{x1:POS[a][0],y1:POS[a][1],x2:POS[b][0],y2:POS[b][1],stroke:"#ff4d4d","stroke-width":6,"stroke-dasharray":"14 8",class:"mml",opacity:.95})));
@@ -448,7 +450,7 @@ function mmRender(){
   g.style.opacity=dim?.25:1;
   const hl=isSel||isFight||(rg&&name===mmSel);
   g.append(svgEl("circle",{cx:x,cy:y,r:hl||isTg?31:isCan||isRg?27:23,fill:s.jugadores?.[p.duenio]?.color||"#536273",class:"territory"+(isTg||isCan||isRg?" mmn":""),stroke:isTg?"#ff4d4d":hl?"#ffd166":isCan||isRg?"#fff":(isMine&&(place||rg)?"#fff":"#e6edf5"),"stroke-width":isTg?8:hl?7:isCan||isRg?5:2.5}));
-  g.append(svgEl("text",{x,y:y+6,class:"army-label",style:"font-size:18px"},p.fichas));
+  g.append(svgEl("text",{x,y:y+6,class:"army-label",style:"font-size:18px"},p.fichas));if((me.cartas||[]).includes(name))g.append(svgEl("text",{x:x+20,y:y-12,style:"font-size:17px;pointer-events:none"},"🃏"));
   g.append(svgEl("text",{x,y:y+(hl||isTg?47:41),class:"territory-label",style:"font-size:12px"},name));
   g.addEventListener("click",()=>mmTap(name));svg.append(g);
   if(isFight)badges.push([x,y,name===cb.from?"ATACA":"DEFIENDE",name===cb.from?"#ff6b6b":"#6cb6ff"]);
@@ -471,12 +473,13 @@ function mmRender(){
  else if(atk){if(!mmSel)h="⚔️ Tocá un país tuyo <b>(con borde blanco)</b> desde donde atacar.";else if(!mmTo)h=`Atacás desde <b>${escapeHtml(mmSel)}</b>. Tocá un país marcado en rojo.`;
   else{h=`<b>${escapeHtml(mmSel)}</b> ➜ <b>${escapeHtml(mmTo)}</b><br>¿Cuántos dados?`;for(let d=1;d<=Math.min(3,s.paises[mmSel].fichas-1);d++){const a=mmSel,b=mmTo;acts.push([`🎲 ${d}`,()=>mmThrow(`${a} ➜ ${b} con ${d} dado${d>1?"s":""}`,()=>{const F=$("mFrom"),T=$("mTo"),C=$("mAttackCount");F.innerHTML=T.innerHTML=C.innerHTML="";F.add(new Option(a,a));T.add(new Option(b,b));C.add(new Option(d,d));mmTo="";attack()}),"danger"])}}
   acts.push(["Terminar ataques",()=>$("mSkipAttackBtn").click(),"secondary"])}
+ else if(f==="sorteo"){h=me.dadoSorteo?`Sacaste <span style="font-size:2rem">${face(me.dadoSorteo)}</span> ${me.dadoSorteo}. Mirá la TV.`:"🎲 Sorteo inicial: tirá el dado. Empieza el que saque más.";if(!me.dadoSorteo)acts.push(["🎲 Tirar dado",()=>mmThrow("Tirás el dado inicial",()=>$("sorteoBtn").click()),"danger"])}
  else h=escapeHtml($("mMessage").textContent);
- if(mmArm&&!(atk||isDef)){mmArm=null;shakeStop()}
+ if(mmArm&&!(atk||isDef||(f==="sorteo"&&!me.dadoSorteo))){mmArm=null;shakeStop()}
  if(mmArm){h=`📳 <b>¡Sacudí el celu para tirar!</b><br>${escapeHtml(mmArm.label)}`;acts=[["Tirar ya",()=>{const f=mmArm?.fn;mmArm=null;shakeStop();f&&f()},"danger"],["Cancelar",()=>{mmArm=null;shakeStop();mmRender()},"secondary"]]}
  const hud=$("mmHud");hud.innerHTML=`<div>${h}</div>`;if(acts.length){const r=document.createElement("div");r.className="r";acts.forEach(([t,fn,cl])=>{if(t[0]==="§"){const d=document.createElement("div");d.style.cssText="flex:1 1 100%;font-size:.8rem;color:#ffd166";d.textContent=t.slice(1);r.append(d);return}const b=document.createElement("button");b.className=cl;b.textContent=t;b.onclick=fn;r.append(b)});hud.append(r)}
  let bt="";if(cb?.ataque&&cb.defensa&&cb.estado!=="defensa"){const A=cb.ataque,D=cb.defensa,k=Math.min(A.length,D.length);bt=`<div class="mmb"><b>🎲 Última batalla</b><div>⚔️ ${A.map((v,i)=>mmDie(v,i<k&&v>D[i])).join("")}</div><div>🛡️ ${D.map((v,i)=>mmDie(v,i<k&&!(A[i]>v))).join("")}</div><div style="margin-top:4px">Atacante −${cb.la} · Defensor −${cb.ld}</div></div>`}
- $("mmBat").innerHTML=bt}
+ $("mmBat").innerHTML=bt;mmCardsRender(s,me,rg)}
 
 
 /* ===== Ajustes: dados TV, aviso celu, sin reloj ===== */
@@ -500,6 +503,44 @@ async function mmThrow(label,fn){
  if(!ok){fn();return}
  mmArm={label,fn};mmRender();shakeStart(()=>{const f=mmArm?.fn;mmArm=null;try{navigator.vibrate&&navigator.vibrate(80)}catch(e){}f&&f()})}
 {const b=document.createElement("button");b.className="secondary";const t=()=>b.textContent=shOn?"📳 Sacudir para tirar: SÍ":"📳 Sacudir para tirar: NO";t();b.onclick=()=>{shOn=!shOn;try{localStorage.setItem("teg_shake",shOn?"1":"0")}catch(e){}t()};$("mmSide").append(b)}
+
+/* ===== Reagrupe rápido: todo en una sola jugada + respuesta inmediata ===== */
+function optMove(c,delta){const s=live;if(!s)return null;const me=s.jugadores?.[playerId],p=s.paises?.[c];if(!me||!p)return null;
+ const n=structuredClone(s),m=n.jugadores[playerId],q=n.paises[c];
+ if(delta<0){const k=-delta;if(q.fichas-k<1)return null;q.fichas-=k;m.pool=(m.pool||0)+k;m.poolFrom=c}
+ else if((m.pool||0)>0){const k=Math.min(delta,m.pool);q.fichas+=k;m.pool-=k;if(m.pool<=0)m.poolFrom=""}
+ else if((m.fichasParaColocar||0)>0){const k=Math.min(delta,m.fichasParaColocar);q.fichas+=k;m.fichasParaColocar-=k}
+ else return null;
+ const prev=live;live=n;mmRender();return [prev,n]}
+async function moveBulk(country,delta){const o=optMove(country,delta);
+ try{await runTx(db,async tx=>{const ref=roomRef(),snap=await tx.get(ref),s=snap.data();
+  if(s.fase!=="reagrupe")throw Error("Se reagrupa cuando termina la rueda de ataques.");
+  const me=s.jugadores[playerId],p=s.paises[country],pool=me.pool||0,from=me.poolFrom||"",nuevos=me.fichasParaColocar||0;
+  if(me.listo)throw Error("Ya terminaste de reagrupar.");
+  if(!p||p.duenio!==playerId)throw Error("Ese país no es tuyo.");
+  if(delta<0){const k=-delta;if(pool>0&&from!==country)throw Error("Primero poné los ejércitos sueltos (salieron de "+from+").");if(p.fichas-k<1)throw Error("Tiene que quedar al menos 1 ejército.");
+   tx.update(ref,{[`paises.${country}.fichas`]:p.fichas-k,[`jugadores.${playerId}.pool`]:pool+k,[`jugadores.${playerId}.poolFrom`]:country})}
+  else if(pool>0){const k=Math.min(delta,pool);if(country!==from&&!(ADJ[from]||[]).includes(country))throw Error("Solo podés pasarlos a un país tuyo vecino de "+from+".");
+   tx.update(ref,{[`paises.${country}.fichas`]:p.fichas+k,[`jugadores.${playerId}.pool`]:pool-k,[`jugadores.${playerId}.poolFrom`]:pool-k>0?from:""})}
+  else if(nuevos>0){const k=Math.min(delta,nuevos);tx.update(ref,{[`paises.${country}.fichas`]:p.fichas+k,[`jugadores.${playerId}.fichasParaColocar`]:nuevos-k})}
+  else throw Error("No tenés ejércitos para poner: sacá algunos de un país y pasalos a un vecino.")});return true}
+ catch(e){if(o&&live===o[1]){live=o[0];mmRender()}alert(e.message);return false}}
+
+/* ===== Cartas de país dentro del mapa táctil ===== */
+const mmCardsBox=document.createElement("div");mmCardsBox.id="mmCards";$("mmBat").after(mmCardsBox);
+let mmPrevCards=null,mmNewName="",mmNewT=0;
+function mmCardsRender(s,me,rg){
+ const cs=me.cartas||[];if(mmPrevCards!==null&&cs.length>mmPrevCards){mmNewName=cs[cs.length-1];mmNewT=Date.now()}mmPrevCards=cs.length;
+ mmCardsBox.innerHTML="";if(!cs.length)return;
+ const box=document.createElement("div");box.className="mmb";box.innerHTML="<b>🃏 Tus cartas</b>";
+ const hint=document.createElement("div");hint.style.cssText="font-size:.75rem;color:#9fb0c3;margin:4px 0";hint.textContent=rg?"Tocá una carta tuya para sumar 2 ejércitos.":"Las usás en el reagrupe (marcadas con 🃏 en el mapa).";box.append(hint);
+ const row=document.createElement("div");row.style.cssText="display:flex;flex-wrap:wrap;gap:6px";
+ cs.forEach(c=>{const owned=s.paises[c]?.duenio===playerId,nw=c===mmNewName&&Date.now()-mmNewT<30000;
+  if(rg&&owned){const b=document.createElement("button");b.className="good";b.style.cssText="padding:8px 10px;font-size:.85rem";b.textContent=`🃏 ${c} · +2${nw?" ✨":""}`;b.onclick=()=>useCard(c);row.append(b)}
+  else{const d=document.createElement("span");d.style.cssText=`padding:6px 8px;border-radius:8px;font-size:.8rem;font-weight:700;background:${owned?"#24456b":"#2a3441"};color:${owned?"#fff":"#9fb0c3"};${nw?"outline:2px solid #ffd166":""}`;d.textContent=`🃏 ${c}${owned?"":" · falta conquistar"}${nw?" ✨ nueva":""}`;row.append(d)}});
+ box.append(row);mmCardsBox.append(box)}
+
+let sorteoSeen={},sorteoRoll={},sorteoIv=null;
 </script>
 <div id="diceOverlay" class="hidden"></div>
 </body>
