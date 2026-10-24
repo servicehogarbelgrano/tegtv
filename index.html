@@ -2,6 +2,7 @@
 <html lang="es">
 <head>
 <meta charset="UTF-8">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' https://www.gstatic.com https://cdnjs.cloudflare.com; connect-src https://*.googleapis.com https://*.firebaseio.com https://*.firebaseapp.com https://*.google.com https://www.gstatic.com wss://*.firebaseio.com; img-src 'self' data: blob: https:; media-src 'self' data: blob:; style-src 'self' 'unsafe-inline'; frame-src https://*.firebaseapp.com https://accounts.google.com; object-src 'none'; base-uri 'none'; form-action 'none'">
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
 <title>TEG TV · Tablero conectado</title>
 <script src="https://www.gstatic.com/firebasejs/10.4.0/firebase-app.js" type="module"></script>
@@ -108,6 +109,19 @@ let sala="",playerId="",isHost=false,unsubscribe=null,live=null,selectedFrom="",
 const roomRef=()=>doc(db,"salas",sala);
 function show(id){["home","lobby","tvGame","mobile"].forEach(x=>$(x).classList.toggle("hidden",x!==id))}
 function escapeHtml(s){return String(s??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]))}
+const safeColor=c=>/^#[0-9a-fA-F]{6}$/.test(String(c))?String(c):"#888888";
+const num=n=>Number.isFinite(Number(n))?Number(n):0;
+const SALA_RE=/^[A-HJ-NP-Z2-9]{6}$/;
+function cleanState(s){
+  if(!s||typeof s!=="object")return s;
+  const J=s.jugadores&&typeof s.jugadores==="object"?s.jugadores:{};
+  Object.keys(J).forEach(id=>{const p=J[id];if(!p||typeof p!=="object"){delete J[id];return}p.color=safeColor(p.color);p.nombre=String(p.nombre??"").slice(0,24)});
+  const cb=s.combate;
+  if(cb&&typeof cb==="object"){cb.from=String(cb.from??"");cb.to=String(cb.to??"");cb.dadosA=num(cb.dadosA);cb.la=num(cb.la);cb.ld=num(cb.ld);cb.ataque=(Array.isArray(cb.ataque)?cb.ataque:[]).map(num);cb.defensa=(Array.isArray(cb.defensa)?cb.defensa:[]).map(num)}
+  const uc=s.ultimoCombate;
+  if(uc&&typeof uc==="object"){uc.ataque=(Array.isArray(uc.ataque)?uc.ataque:[]).map(num);uc.defensa=(Array.isArray(uc.defensa)?uc.defensa:[]).map(num)}
+  return s;
+}
 function err(id,msg){$(id).textContent=msg;$(id).classList.remove("hidden")}
 function clearErr(id){$(id).textContent="";$(id).classList.add("hidden")}
 function randomCode(){const AL='ABCDEFGHJKLMNPQRSTUVWXYZ23456789';return Array.from(crypto.getRandomValues(new Uint8Array(6)),b=>AL[b%32]).join('')}
@@ -207,19 +221,19 @@ async function createRoom(){
  await setDoc(roomRef(),{estado:"lobby",fase:"lobby",hostId:playerId,jugadores:p,paises:{},turnoActual:"",ronda:1,registro:["Sala creada."],createdAt:serverTimestamp()});
  show("lobby");$("roomCode").textContent=sala;$("tvRoom").textContent="Sala "+sala;
  $("qr").innerHTML="";const qrUrl=location.href.split("?")[0]+"?sala="+sala;
- try{new QRCode($("qr"),{text:qrUrl,width:220,height:220})}catch(e){$("qr").innerHTML=`<p style="color:#222">Código: ${sala}</p>`}$("qr").insertAdjacentHTML("beforeend",`<div style="color:#222;font-size:12px;word-break:break-all;margin-top:8px;max-width:240px">${qrUrl}</div>`);
+ try{new QRCode($("qr"),{text:qrUrl,width:220,height:220})}catch(e){$("qr").innerHTML=`<p style="color:#222">Código: ${sala}</p>`}$("qr").insertAdjacentHTML("beforeend",`<div style="color:#222;font-size:12px;word-break:break-all;margin-top:8px;max-width:240px">${escapeHtml(qrUrl)}</div>`);
  listenRoom();
  }catch(e){show("home");err("homeError","No se pudo crear la sala: "+e.message)}
 }
 async function joinRoom(code,name,errId){
- try{clearErr(errId);if(!code||!name.trim())throw Error("Ingresá el código y tu nombre.");await signInAnonymously(auth);playerId=auth.currentUser.uid;sala=code.toUpperCase();isHost=false;
+ try{clearErr(errId);if(!code||!name.trim())throw Error("Ingresá el código y tu nombre.");await signInAnonymously(auth);playerId=auth.currentUser.uid;sala=String(code).trim().toUpperCase();if(!SALA_RE.test(sala))throw Error("Código de sala inválido.");isHost=false;
  const ref=roomRef();await runTx(db,async tx=>{const snap=await tx.get(ref);if(!snap.exists())throw Error("No existe esa sala.");const s=snap.data();const players=s.jugadores||{};if(players[playerId])return;if(s.estado!=="lobby")throw Error("La partida ya comenzó.");if(Object.keys(players).length>=4)throw Error("La sala está completa (máximo 4 jugadores).");const color=COLORS.find(c=>!Object.values(players).some(p=>p.color===c))||COLORS[0];const objective=pickObjective(Object.keys(players).length);tx.update(ref,{[`jugadores.${playerId}`]:{nombre:name.trim().slice(0,24),color,dadoSorteo:0,fichasParaColocar:0,objetivo:"",objetivoCont:[]}})});
  try{localStorage.setItem("teg_sesion",JSON.stringify({sala,nombre:name.trim()}))}catch(e){}
  show("mobile");$("mobileLogin").classList.add("hidden");$("mobileGame").classList.remove("hidden");listenRoom();
  }catch(e){if(/No existe/.test(e.message||""))try{localStorage.removeItem("teg_sesion")}catch(_){}err(errId,e.message||"No se pudo conectar.")}
 }
 function pickObjective(i){return "Objetivo común: ocupar 30 países (2 jugadores), 27 (3) o 25 (4). Los objetivos secretos de las tarjetas todavía no están cargados."}
-function listenRoom(){if(unsubscribe)unsubscribe();unsubscribe=onSnapshot(roomRef(),snap=>{if(!snap.exists())return;const s=snap.data();live=s;if(s.estado==="lobby"){if(isHost){show("lobby");renderLobby(s)}else{show("mobile");$("mobileLogin").classList.add("hidden");$("mobileGame").classList.remove("hidden");renderMobile(s)}}else{if(isHost)show("tvGame");else show("mobile");if(isHost)renderGame(s);else if(!phoneHold(s))renderMobile(s)}},e=>{if(isHost)err("homeError","Error de Firebase: "+e.message);else err("mError","Error de Firebase: "+e.message)})}
+function listenRoom(){if(unsubscribe)unsubscribe();unsubscribe=onSnapshot(roomRef(),snap=>{if(!snap.exists())return;const s=cleanState(snap.data());live=s;if(s.estado==="lobby"){if(isHost){show("lobby");renderLobby(s)}else{show("mobile");$("mobileLogin").classList.add("hidden");$("mobileGame").classList.remove("hidden");renderMobile(s)}}else{if(isHost)show("tvGame");else show("mobile");if(isHost)renderGame(s);else if(!phoneHold(s))renderMobile(s)}},e=>{if(isHost)err("homeError","Error de Firebase: "+e.message);else err("mError","Error de Firebase: "+e.message)})}
 const OBJETIVOS=[
 {t:"Ocupar América del Norte y Europa",c:["América del Norte","Europa"]},
 {t:"Ocupar América del Sur, África y Oceanía",c:["América del Sur","África","Oceanía"]},
@@ -233,7 +247,7 @@ function renderGame(s){renderGameBase(s);showWin(s);const J=s.jugadores||{},ids=
  if(f==="colocacion"){$("tvStatus").textContent="Todos colocan sus ejércitos";$("tvCurrent").textContent="Cada uno ve su objetivo en el celular";box.innerHTML=ids.map(id=>row(id,(J[id].fichasParaColocar||0)>0?`faltan ${J[id].fichasParaColocar}`:"✔ listo")).join("")}
  else if(f==="reagrupe"){$("tvStatus").textContent="Reagrupe: todos suman y mueven ejércitos";$("tvCurrent").textContent="Fichas por países y continentes, más cartas";box.innerHTML=ids.map(id=>row(id,J[id].listo?"✔ listo":(J[id].fichasParaColocar||0)>0?`faltan ${J[id].fichasParaColocar}`:"reagrupando")).join("")}
  else if(f==="sorteo")sorteoTV(s);
- else if(cb){const at=J[cb.atacanteId];box.innerHTML=`<div class="tiny"><b style="color:${at?.color||"#fff"}">${escapeHtml(at?.nombre||"")}</b> ⚔ ${cb.from} → ${cb.to}</div>`+(cb.estado==="defensa"?`<div class="tiny muted">${cb.dadosA} dado(s) · espera defensa de ${escapeHtml(J[cb.defensorId]?.nombre||"")}</div>`:`<div class="tiny">🎲 ${(cb.ataque||[]).join(" ")} vs ${(cb.defensa||[]).join(" ")} · −${cb.la} / −${cb.ld}${cb.estado==="conquista"?" · ¡conquistado!":""}</div>`)}}
+ else if(cb){const at=J[cb.atacanteId];box.innerHTML=`<div class="tiny"><b style="color:${at?.color||"#fff"}">${escapeHtml(at?.nombre||"")}</b> ⚔ ${escapeHtml(cb.from)} → ${escapeHtml(cb.to)}</div>`+(cb.estado==="defensa"?`<div class="tiny muted">${cb.dadosA} dado(s) · espera defensa de ${escapeHtml(J[cb.defensorId]?.nombre||"")}</div>`:`<div class="tiny">🎲 ${(cb.ataque||[]).join(" ")} vs ${(cb.defensa||[]).join(" ")} · −${cb.la} / −${cb.ld}${cb.estado==="conquista"?" · ¡conquistado!":""}</div>`)}}
 function renderMobile(s){renderMobileBase(s);showWin(s);const me=s.jugadores?.[playerId];if(!me)return;
  const f=s.fase,my=s.turnoActual===playerId,cb=s.combate,tog=(id,on)=>$(id).classList.toggle("hidden",!on),n=me.fichasParaColocar||0,col=f==="colocacion",sor=f==="sorteo",wait=cb?.estado==="defensa",conq=cb?.estado==="conquista",isDef=wait&&cb.defensorId===playerId;
  $("mObjective").textContent=me.objetivo||"Se te repartirá al empezar";
